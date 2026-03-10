@@ -21,7 +21,7 @@
 
 Wisdom in Data（智数）是一个开源多智能体 TableQA 平台，在同一工作流中统一支持关系数据库推理（SQL）与知识图谱推理（Cypher）。
 
-论文：**DataFactory: Collaborative Multi-Agent Framework for Advanced Table Question Answering**（Information Processing & Management）。
+论文：**DataFactory: Collaborative multi-agent framework for advanced table question answering**（Information Processing & Management，Volume 63，Issue 6，Article 104723，2026）。DOI：https://doi.org/10.1016/j.ipm.2026.104723
 
 English README: `README.md`
 
@@ -244,15 +244,18 @@ OLLAMA_EMBEDDING_MODEL=<your-embedding-model>
 ## 引用
 
 ```bibtex
-@article{datafactory_ipm_2026,
-  title   = {DataFactory: Collaborative Multi-Agent Framework for Advanced Table Question Answering},
-  author  = {TODO: Authors},
+@article{WANG2026104723,
+  title = {DataFactory: Collaborative multi-agent framework for advanced table question answering},
   journal = {Information Processing & Management},
-  year    = {2026},
-  volume  = {TODO},
-  number  = {TODO},
-  pages   = {TODO},
-  doi     = {TODO}
+  volume = {63},
+  number = {6},
+  pages = {104723},
+  year = {2026},
+  issn = {0306-4573},
+  doi = {https://doi.org/10.1016/j.ipm.2026.104723},
+  url = {https://www.sciencedirect.com/science/article/pii/S0306457326001147},
+  author = {Tong Wang and Chi Jin and Yongkang Chen and Huan Deng and Xiaohui Kuang and Gang Zhao},
+  keywords = {Table question answering, Multi-agent systems, Large language models, Knowledge graph, Data factory, ReAct paradigm}
 }
 ```
 
