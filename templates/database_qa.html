@@ -1,0 +1,3464 @@
+{% extends "layout.html" %}
+
+{% block title %}WisdominDATA - 数据库问答{% endblock %}
+
+{% block additional_styles %}
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        overflow: hidden;
+    }
+    
+    .main-content {
+        height: 100vh;
+        padding: 0;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .main-container {
+        display: flex;
+        height: calc(100vh - 30px);
+        width: calc(100% - 30px);
+        margin: 15px;
+        overflow: hidden;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        background-color: #fff;
+    }
+    
+    .left-sidebar {
+        width: 300px; /* 统一宽度为300px */
+        border-right: 1px solid #dee2e6;
+        padding: 20px;
+        overflow-y: auto;
+        background-color: #f8f9fa;
+    }
+    
+    .sidebar-title {
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #dee2e6;
+        font-size: 20px;
+        color: #495057;
+    }
+    
+    #sessions-list {
+        margin-top: 10px;
+    }
+    
+    .no-sessions {
+        text-align: center;
+        color: #6c757d;
+        padding: 20px 0;
+    }
+    
+    .content-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        transition: margin-left 0.3s, width 0.3s; /* 添加过渡效果 */
+        padding: 0; /* 移除内边距 */
+        box-sizing: border-box; /* 确保宽度计算包含内边距和边框 */
+        margin-left: 0; /* 移除左边距，使其直接跟随左侧边栏 */
+    }
+    
+    .content-area.fullwidth {
+        margin-left: 0;
+        width: 100%;
+    }
+    
+    .tab-buttons {
+        display: flex;
+        border-bottom: 1px solid #dee2e6;
+        margin-bottom: 15px;
+        padding: 10px 20px; /* 增加水平内边距 */
+        background-color: #f8f9fa; /* 轻微背景色以区分 */
+    }
+    
+    .tab-button {
+        padding: 8px 20px;
+        margin-right: 10px;
+        background: none;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+    
+    .tab-button.active {
+        background-color: #e9ecef;
+        border-bottom: 2px solid #007bff;
+        font-weight: bold;
+    }
+    
+    .tab-content {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+    }
+    
+    #qa-tab {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        position: relative;
+    }
+    
+    .chat-wrapper {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+        height: calc(100% - 56px); /* 减去标签页的高度 */
+    }
+    
+    .chat-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+        height: 100%;
+        position: relative;
+    }
+    
+    .chat-messages {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding: 20px;
+        background-color: #fff;
+        margin-bottom: 70px; /* 输入框高度 */
+    }
+    
+    .message {
+        margin-bottom: 20px;
+        display: flex;
+        align-items: flex-start;
+        position: relative;
+        width: 100%;
+    }
+    
+    .message-bubble {
+        padding: 12px 15px;
+        border-radius: 8px;
+        max-width: 80%;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        overflow-wrap: break-word;
+    }
+    
+    .user-message .message-bubble {
+        background-color: #007bff;
+        color: white;
+        margin-left: auto;
+    }
+    
+    .ai-message .message-bubble {
+        background-color: #f0f2f5;
+        color: #212529;
+    }
+    
+    .message-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 4px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .user-message {
+        flex-direction: row-reverse;
+    }
+    
+    .user-message .message-icon {
+        margin-left: 10px;
+        background-color: #0056b3;
+        color: white;
+    }
+    
+    .ai-message .message-icon {
+        margin-right: 10px;
+        background-color: #4caf50;
+        color: white;
+    }
+    
+    .message-content {
+        flex: 1;
+    }
+    
+    .message-timestamp {
+        display: none;
+    }
+    
+    .sql-code {
+        background-color: #2d2d2d;
+        color: #f8f8f2;
+        padding: 10px;
+        border-radius: 5px;
+        font-family: monospace;
+        margin: 10px 0;
+        white-space: pre-wrap;
+    }
+    
+    .result-table {
+        width: 100%;
+        overflow-x: auto;
+        margin: 10px 0;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .table {
+        width: 100%;
+        margin-bottom: 1rem;
+        color: #212529;
+        border-collapse: collapse;
+    }
+    
+    .table-striped tbody tr:nth-of-type(odd) {
+        background-color: rgba(0, 0, 0, 0.02);
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.075);
+    }
+    
+    .table-bordered {
+        border: 1px solid #dee2e6;
+    }
+    
+    .table-bordered th,
+    .table-bordered td {
+        border: 1px solid #dee2e6;
+    }
+    
+    .table-primary,
+    .table-primary > th,
+    .table-primary > td {
+        background-color: #b8daff;
+    }
+    
+    .table th {
+        vertical-align: middle;
+        border-top: 1px solid #dee2e6;
+        padding: 0.75rem;
+        text-align: left;
+    }
+    
+    .table td {
+        vertical-align: middle;
+        border-top: 1px solid #dee2e6;
+        padding: 0.75rem;
+    }
+    
+    .table-responsive {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .ai-message .message-bubble {
+        background-color: #f0f2f5;
+        color: #212529;
+        max-width: 90%; /* 扩大AI消息气泡的宽度以容纳表格 */
+    }
+    
+    .chart-container {
+        width: 100%;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        padding: 15px;
+        margin: 15px 0;
+    }
+    
+    .markdown-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 15px 0;
+    }
+    
+    .markdown-content table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+    }
+    
+    .markdown-content table th,
+    .markdown-content table td {
+        padding: 8px 12px;
+        border: 1px solid #e5e7eb;
+        text-align: left;
+    }
+    
+    .markdown-content table tr:nth-child(even) {
+        background-color: #f8f9fa;
+    }
+    
+    .markdown-content table tr:hover {
+        background-color: #f0f2f5;
+    }
+    
+    .model-settings {
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        padding: 10px;
+    }
+    
+    .model-setting {
+        margin-bottom: 15px;
+    }
+    
+    .model-setting label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .input-area {
+        display: flex;
+        padding: 15px 20px;
+        background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+        width: 100%;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        min-height: 70px;
+        z-index: 100;
+    }
+    
+    .input-area textarea {
+        flex: 1;
+        padding: 12px 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px 0 0 8px;
+        outline: none;
+        font-size: 16px;
+        resize: none;
+        min-height: 40px;
+        max-height: 150px;
+        overflow-y: auto;
+        line-height: 1.5;
+    }
+    
+    .input-area button {
+        padding: 12px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 0 8px 8px 0;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 16px;
+        align-self: stretch;
+    }
+    
+    .input-area button:disabled {
+        background-color: #6c757d;
+        cursor: not-allowed;
+    }
+    
+    .input-area textarea:disabled {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+    }
+    
+    .session-item {
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: background-color 0.3s, transform 0.2s;
+        border: 1px solid transparent;
+    }
+    
+    .session-item:hover {
+        background-color: #e9ecef;
+        transform: translateY(-1px);
+    }
+    
+    .session-item.active {
+        background-color: #e7f5ff;
+        color: #0056b3;
+        border-color: #b8daff;
+    }
+    
+    .typing-indicator {
+        display: flex;
+        padding: 10px;
+    }
+    
+    .typing-indicator span {
+        height: 10px;
+        width: 10px;
+        background-color: #bbb;
+        border-radius: 50%;
+        margin: 0 2px;
+        display: inline-block;
+        animation: bounce 1.5s infinite ease-in-out;
+    }
+    
+    .typing-indicator span:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+    
+    .typing-indicator span:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+    
+    @keyframes bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-5px); }
+    }
+    
+    .message-actions {
+        display: none;
+        position: absolute;
+        top: -30px;
+        right: 0;
+        background-color: #fff;
+        padding: 5px;
+        border-radius: 4px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        z-index: 5;
+    }
+    
+    .ai-message:hover .message-actions {
+        display: flex;
+    }
+    
+    .message-actions button {
+        padding: 3px 8px;
+        font-size: 0.75rem;
+        margin-left: 5px;
+        border-radius: 3px;
+    }
+    
+    .markdown-content img {
+        max-width: 100%;
+    }
+    
+    .action-buttons {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+    }
+    
+    #new-session-btn {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 15px;
+    }
+    
+    .form-select-sm {
+        height: 35px;
+        padding: 5px 10px;
+        width: 100%;
+    }
+    
+    .btn-sm {
+        padding: 8px 12px;
+    }
+    
+    .sidebar-section {
+        margin-bottom: 25px;
+        background-color: #fff;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar-section h4 {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #e9ecef;
+        font-size: 16px;
+        color: #495057;
+    }
+    
+    #data-tab {
+        padding: 20px;
+        overflow-y: auto;
+    }
+    
+    .ai-message .message-content {
+        position: relative;
+    }
+    
+    .right-sidebar {
+        width: 280px;
+        padding: 20px;
+        overflow-y: auto;
+        background-color: #f8f9fa;
+        border-left: 1px solid #dee2e6;
+    }
+    
+    #database-info {
+        padding: 6px 10px;
+        background-color: #f8f9fa;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 14px;
+        line-height: 1.5;
+        min-height: 35px;
+        display: flex;
+        align-items: center;
+    }
+    
+    #database-info strong {
+        margin-right: 5px;
+        color: #495057;
+    }
+    
+    .result-tabs {
+        margin-top: 20px;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .result-tabs .nav-tabs {
+        border-bottom: none;
+        background-color: #f8f9fa;
+    }
+    
+    .result-tabs .nav-tabs .nav-link {
+        border: none;
+        color: #495057;
+        font-weight: 500;
+        padding: 10px 15px;
+        border-radius: 0;
+        margin-right: 2px;
+    }
+    
+    .result-tabs .nav-tabs .nav-link.active {
+        background-color: #fff;
+        border-top: 3px solid #007bff;
+        color: #007bff;
+    }
+    
+    .result-tabs .tab-content {
+        background-color: #fff;
+    }
+    
+    .result-tabs .tab-pane {
+        padding: 15px;
+        min-height: 150px;
+    }
+    
+    /* SQL显示样式 */
+    .result-tabs pre {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #e9ecef;
+        margin: 0;
+    }
+    
+    /* 解释文本样式 */
+    .explanation-text {
+        padding: 15px;
+        margin-bottom: 15px;
+        background-color: #f0f7ff;
+        border-left: 4px solid #007bff;
+        border-radius: 0 4px 4px 0;
+        color: #333;
+        font-size: 16px;
+        line-height: 1.6;
+    }
+
+    .stream-status-wrap {
+        margin: 0 0 12px 0;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: #eef4ff;
+        border: 1px solid #d7e4ff;
+    }
+
+    .stream-status-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        font-size: 13px;
+        color: #24478f;
+    }
+
+    .stream-progress {
+        height: 8px;
+        width: 100%;
+        border-radius: 999px;
+        overflow: hidden;
+        background: #dfe8f9;
+    }
+
+    .stream-progress-bar {
+        height: 100%;
+        width: 0;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #2e7be6 0%, #61a5ff 100%);
+        background-size: 26px 26px;
+        animation: stream-stripes 0.8s linear infinite;
+        transition: width 220ms ease;
+    }
+
+    .stream-progress-bar.done {
+        animation: none;
+        background: linear-gradient(90deg, #1d9d6f 0%, #4cc190 100%);
+    }
+
+    .stream-live-bubble {
+        width: min(82%, 860px);
+        max-width: min(82%, 860px);
+        flex: 0 0 min(82%, 860px);
+        border: 1px solid #d6e3fb;
+        background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+    }
+
+    @media (max-width: 992px) {
+        .stream-live-bubble {
+            width: calc(100% - 44px);
+            max-width: calc(100% - 44px);
+            flex-basis: calc(100% - 44px);
+        }
+    }
+
+    @keyframes stream-stripes {
+        from {
+            background-position: 0 0;
+        }
+        to {
+            background-position: 26px 0;
+        }
+    }
+    
+    /* 消息样式优化 */
+    .ai-message .message-bubble {
+        background-color: #f8f9fa;
+        padding: 15px 20px;
+    }
+    
+    .markdown-content {
+        line-height: 1.6;
+    }
+    
+    .chart-result-container {
+        min-height: 300px;
+        padding: 10px;
+        background-color: #fff;
+        border-radius: 4px;
+    }
+    
+    /* 表格样式优化 */
+    .table-responsive {
+        margin-bottom: 0;
+    }
+    
+    /* 减小结果表格字体并强制换行 */
+    .result-tabs .table th,
+    .result-tabs .table td {
+        font-size: 0.85rem; /* 减小字体大小 */
+        white-space: normal !important; /* 允许正常换行 */
+        word-break: break-word; /* 在单词内部断开 */
+    }
+    
+    .table-striped tbody tr:nth-of-type(odd) {
+        background-color: rgba(0,123,255,0.05);
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: rgba(0,123,255,0.075);
+    }
+    
+    .table-bordered th {
+        background-color: #f8f9fa;
+        border-bottom-width: 2px;
+    }
+    
+    /* 思考过程样式 */
+    .thinking-container .accordion-button:not(.collapsed) {
+        background-color: #f0f7ff;
+        color: #0056b3;
+    }
+    
+    .thinking-content {
+        background-color: #f8f9fa;
+        font-size: 0.9rem;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .thinking-content pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #666;
+        font-family: 'Courier New', monospace;
+        margin: 0;
+    }
+    
+    /* 修正 table-responsive 在 message-bubble 内的溢出问题 */
+    .ai-message .message-bubble .table-responsive {
+        overflow-x: auto; /* 强制水平滚动 */
+        max-width: 100%;  /* 确保不超过气泡宽度 */
+    }
+    
+    /* 确保Markdown渲染的内容样式正确 */
+    .explanation-text {
+        line-height: 1.6;
+    }
+    
+    .explanation-text p {
+        margin-bottom: 1em;
+    }
+    
+    .explanation-text code {
+        padding: 2px 4px;
+        background-color: #f5f5f5;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+    }
+    
+    .explanation-text pre {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 5px;
+        overflow-x: auto;
+    }
+    
+    .explanation-text pre code {
+        background-color: transparent;
+        padding: 0;
+    }
+    
+    .explanation-text ul, .explanation-text ol {
+        margin-bottom: 1em;
+        padding-left: 1.5em;
+    }
+    
+    .explanation-text table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-bottom: 1em;
+    }
+    
+    .explanation-text th, .explanation-text td {
+        border: 1px solid #ddd;
+        padding: 8px;
+    }
+    
+    .explanation-text th {
+        background-color: #f2f2f2;
+    }
+    
+    .session-item strong {
+        display: block; /* 让标题独占一行 */
+        margin-bottom: 3px;
+    }
+    
+    .session-item small {
+        color: #6c757d;
+        display: block;
+        font-size: 0.85em;
+        margin-bottom: 2px;
+    }
+
+    .session-item .delete-session-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        display: none; /* 默认隐藏 */
+        padding: 2px 5px;
+        font-size: 0.8em;
+        line-height: 1;
+        background: none;
+        border: none;
+        color: #dc3545;
+        cursor: pointer;
+    }
+
+    .session-item:hover .delete-session-btn {
+        display: inline-block; /* 悬停时显示 */
+    }
+
+    .session-item .delete-session-btn:hover {
+        color: #a71d2a;
+    }
+
+    /* 参考数据标签页样式优化 */
+    #reference-data-tab {
+        height: calc(100vh - 100px); /* 设置高度以适应全屏显示 */
+        display: flex;
+        flex-direction: column;
+        background-color: #f8f9fa; /* 轻微背景色以区分模式 */
+        position: relative; /* 添加定位容器 */
+    }
+
+    /* 添加模式指示器 */
+    #reference-data-tab::before {
+        content: none; /* 移除内容 */
+        display: none; /* 隐藏元素 */
+    }
+
+    #reference-data-tab .tab-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 15px 0;
+    }
+
+    #reference-data-tab #pills-sql-qa,
+    #reference-data-tab #pills-knowledge,
+    #reference-data-tab #pills-ddl { /* Add pills-ddl */
+        height: calc(100vh - 200px); /* Adjust height slightly if needed for 3 tabs */
+        overflow-y: auto;
+    }
+
+    #reference-data-tab .card {
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    #reference-data-tab .table-responsive {
+        max-height: calc(100vh - 200px);
+        overflow-y: auto;
+    }
+
+    /* 响应式设计优化 */
+    @media (max-width: 768px) {
+        .content-area {
+            margin-left: 0;
+        }
+        
+        .left-sidebar {
+            width: 100%;
+            position: fixed;
+            z-index: 100;
+            height: 100%;
+            transform: translateX(-100%);
+            transition: transform 0.3s;
+        }
+        
+        .left-sidebar.show {
+            transform: translateX(0);
+        }
+    }
+
+    .reference-data-selector .data-card {
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .reference-data-selector .data-card .card {
+        transition: all 0.3s;
+        border-width: 2px;
+    }
+
+    .reference-data-selector .data-card:hover .card {
+        transform: translateY(-8px);
+        box-shadow: 0 8px 15px rgba(0,0,0,0.1) !important;
+    }
+
+    .reference-data-selector .data-card.active .card {
+        border-color: #007bff;
+        box-shadow: 0 0 15px rgba(0, 123, 255, 0.3) !important;
+    }
+
+    .reference-data-selector .data-card.active:not(#pills-sql-qa-card):not(#pills-ddl-card) .card { /* Adjust selector */
+        border-color: #28a745;
+        box-shadow: 0 0 15px rgba(40, 167, 69, 0.3) !important;
+    }
+
+    .reference-data-selector .data-card.active:is(#pills-ddl-card) .card { /* Style for DDL card */
+        border-color: #ffc107; /* Example: warning color for DDL */
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.3) !important;
+    }
+
+    /* 强制设置参考数据删除按钮为红色 */
+    .delete-training-item-btn {
+        background-color: #dc3545 !important; /* 使用 Bootstrap 的危险红色 */
+        border-color: #dc3545 !important;
+        color: white !important; /* 确保文字和图标是白色 */
+    }
+
+    .delete-training-item-btn:hover {
+        background-color: #c82333 !important; /* 悬停时加深红色 */
+        border-color: #bd2130 !important;
+        color: white !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="main-container">
+    <!-- 左侧边栏 - 会话历史 -->
+    <div class="left-sidebar">
+        <h2 class="sidebar-title" data-i18n="database_qa.session_management">会话历史</h2>
+        <div class="action-buttons">
+            <button id="new-session-btn" class="btn btn-primary">
+                <i class="fas fa-plus"></i> <span data-i18n="database_qa.new_session">新建会话</span>
+            </button>
+        </div>
+        
+        <div id="sessions-list">
+            <div class="text-center mt-3">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="sr-only" data-i18n="common.loading">加载中...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 中间内容区域 -->
+    <div class="content-area">
+        <!-- 标签页按钮 -->
+        <div class="tab-buttons">
+            <button class="tab-button active" data-target="qa-tab" data-i18n="database_qa.qa_tab">问答</button>
+            <button class="tab-button" data-target="reference-data-tab" data-i18n="database_qa.reference_data_tab">参考数据</button> <!-- 修改标签名称 -->
+        </div>
+
+        <!-- 问答标签页内容 -->
+        <div id="qa-tab" class="tab-content main-tab-content active">
+            <!-- 聊天区域和右侧边栏的包装器 -->
+            <div class="chat-wrapper">
+                <!-- 聊天区域 -->
+                <div class="chat-container">
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="message ai-message">
+                            <div class="message-icon">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="message-bubble">
+                                <div class="message-content">
+                                    <p data-i18n="database_qa.welcome_message">您好，我是您的数据助手。请选择或创建一个会话，然后开始提问。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 右侧边栏 - 模型设置和对话功能 -->
+                <div class="right-sidebar">
+                    <div class="sidebar-section">
+                        <h4 data-i18n="database_qa.model_settings">模型设置</h4>
+                        <div class="model-setting">
+                            <strong data-i18n="database_qa.database">数据库:</strong> <!-- Changed label to strong -->
+                            <div id="database-info" class="form-control-plaintext">-- <span data-i18n="common.loading">加载中</span>... --</div>
+                        </div>
+                        
+                        <div class="model-setting">
+                            <label for="table-select"><strong data-i18n="database_qa.data_table">数据表:</strong></label>
+                            <div class="d-flex">
+                                <select id="table-select" class="form-select form-select-sm flex-grow-1">
+                                    <option value="" data-i18n="js.select_data_table">-- 请选择数据表 --</option>
+                                </select>
+                                <button id="lock-table-btn" class="btn btn-sm btn-outline-primary ms-2" data-action="lock">
+                                    <i class="fas fa-lock"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="model-setting">
+                            <strong data-i18n="database_qa.model">模型:</strong> <!-- Changed label to strong -->
+                            <div id="model-info" class="form-control-plaintext">-- <span data-i18n="common.loading">加载中</span>... --</div>
+                        </div>
+                        
+                        <!-- 新增 auto_train 开关 -->
+                        <div class="model-setting">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="auto-train-switch">
+                                <label class="form-check-label" for="auto-train-switch" data-i18n="database_qa.auto_train_label">启用自动训练 (auto_train)</label>
+                            </div>
+                        </div>
+                        <!-- 结束新增 -->
+                        
+                        <button id="save-settings-btn" class="btn btn-sm btn-primary w-100" data-i18n="database_qa.save_settings">保存设置</button>
+                    </div>
+                    
+                    <div class="sidebar-section">
+                        <h4 data-i18n="database_qa.conversation_features">对话功能</h4>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="auto-naming-switch">
+                            <label class="form-check-label" for="auto-naming-switch" data-i18n="database_qa.auto_naming">启用自动命名</label>
+                        </div>
+                        <button id="export-chat-btn" class="btn btn-sm btn-outline-secondary w-100 mb-2" data-i18n="database_qa.export_chat">导出对话</button>
+                        <button id="clear-chat-btn" class="btn btn-sm btn-outline-danger w-100" data-i18n="database_qa.clear_chat">清空对话</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 输入区域（固定在底部） -->
+            <div class="input-area">
+                <textarea id="question-input" data-i18n-placeholder="database_qa.input_placeholder" placeholder="输入您的问题..." disabled></textarea>
+                <button id="send-btn" disabled data-i18n="database_qa.send_button">发送</button>
+            </div>
+        </div>
+        
+        <!-- 生成数据标签页内容 -->
+        <div id="reference-data-tab" class="tab-content main-tab-content p-3" style="display: none; height: calc(100vh - 100px); overflow-y: auto;"> <!-- 修改高度和滚动设置 -->
+            <!-- 添加子标签页导航 -->
+            <div class="reference-data-selector mb-4">
+                <div class="d-flex justify-content-end mb-2">
+                    <button class="btn btn-sm btn-outline-secondary" id="refresh-training-data-btn">
+                        <i class="fas fa-sync-alt me-1"></i> <span data-i18n="database_qa.refresh_training_data">刷新</span>
+                    </button>
+                </div>
+                <div class="row">
+                    <!-- SQL QA Card -->
+                    <div class="col-md-4 mb-3"> <!-- Changed to col-md-4 -->
+                        <div id="pills-sql-qa-card" class="data-card active" data-target="#pills-sql-qa">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-database mb-3" style="font-size: 2rem; color: #007bff;"></i>
+                                    <h5 data-i18n="database_qa.add_sql_qa">SQL问答对</h5>
+                                    <p class="text-muted mb-0" data-i18n="database_qa.sql_qa_desc">查看/添加SQL问答训练数据</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Knowledge Card -->
+                    <div class="col-md-4 mb-3"> <!-- Changed to col-md-4 -->
+                        <div id="pills-knowledge-card" class="data-card" data-target="#pills-knowledge">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-book mb-3" style="font-size: 2rem; color: #28a745;"></i>
+                                    <h5 data-i18n="database_qa.knowledge_injection">知识注入</h5>
+                                    <p class="text-muted mb-0" data-i18n="database_qa.knowledge_desc">查看/添加知识库训练数据</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- DDL Card (New) -->
+                    <div class="col-md-4 mb-3"> <!-- Changed to col-md-4 -->
+                        <div id="pills-ddl-card" class="data-card" data-target="#pills-ddl">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-table mb-3" style="font-size: 2rem; color: #ffc107;"></i>
+                                    <h5 data-i18n="database_qa.data_description">数据描述</h5>
+                                    <p class="text-muted mb-0" data-i18n="database_qa.ddl_desc">查看数据表结构 (DDL)</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tab-content" id="reference-data-pills-content">
+                <!-- SQL问答对内容 -->
+                <div class="tab-pane fade show active" id="pills-sql-qa" role="tabpanel" aria-labelledby="pills-sql-qa-tab">
+                    <div class="d-flex justify-content-end mb-3">
+                        <button class="btn btn-primary" id="add-sql-qa-btn">
+                            <i class="fas fa-plus me-1"></i> <span data-i18n="database_qa.add_sql_qa">添加SQL问答对</span>
+                        </button>
+                    </div>
+                    <div id="sql-qa-container">
+                        <p data-i18n="common.loading">加载中...</p>
+                    </div>
+                </div>
+                <!-- 知识注入内容 -->
+                <div class="tab-pane fade" id="pills-knowledge" role="tabpanel" aria-labelledby="pills-knowledge-tab">
+                    <div class="d-flex justify-content-end mb-3">
+                        <button class="btn btn-primary" id="add-knowledge-btn">
+                            <i class="fas fa-plus me-1"></i> <span data-i18n="database_qa.add_knowledge">添加知识文档</span>
+                        </button>
+                    </div>
+                    <div id="knowledge-container">
+                        <p data-i18n="common.loading">加载中...</p>
+                    </div>
+                </div>
+                <!-- 数据描述内容 (New) -->
+                <div class="tab-pane fade" id="pills-ddl" role="tabpanel" aria-labelledby="pills-ddl-tab">
+                    <div class="d-flex justify-content-end mb-3">
+                        <button class="btn btn-warning" id="add-ddl-btn" data-i18n-title="database_qa.add_ddl_hint" title="请到"数据管理"页面添加或更新数据表描述">
+                            <i class="fas fa-plus me-1"></i> <span data-i18n="database_qa.add_ddl_button">添加数据描述 (前往数据管理)</span>
+                        </button>
+                    </div>
+                    <div id="ddl-container">
+                        <p data-i18n="common.loading">加载中...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<!-- SQL问答对添加对话框 -->
+<div class="modal fade" id="sqlQaModal" tabindex="-1" aria-labelledby="sqlQaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="sqlQaModalLabel"><i class="fas fa-database me-2"></i><span data-i18n="database_qa.add_sql_qa">添加SQL问答对</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="sql-qa-form">
+                    <div class="mb-3">
+                        <label for="sql-question" class="form-label" data-i18n="database_qa.question_label">问题</label>
+                        <textarea class="form-control" id="sql-question" rows="3" data-i18n-placeholder="database_qa.question_placeholder" placeholder="例如：公司销售额前10的产品是什么？" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="sql-content" class="form-label" data-i18n="database_qa.sql_label">SQL语句</label>
+                        <textarea class="form-control" id="sql-content" rows="5" data-i18n-placeholder="database_qa.sql_placeholder" placeholder="SELECT * FROM products ORDER BY sales DESC LIMIT 10;" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="database_qa.modal_cancel">取消</button>
+                <button type="button" class="btn btn-primary" id="submit-sql-qa" data-i18n="database_qa.modal_submit">提交</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 知识文档添加对话框 -->
+<div class="modal fade" id="documentationModal" tabindex="-1" aria-labelledby="documentationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="documentationModalLabel"><i class="fas fa-book me-2"></i><span data-i18n="database_qa.add_knowledge">添加知识文档</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="documentation-form">
+                    <div class="mb-3">
+                        <label for="documentation-content" class="form-label" data-i18n="database_qa.document_content_label">文档内容</label>
+                        <textarea class="form-control" id="documentation-content" rows="8" data-i18n-placeholder="database_qa.document_placeholder" placeholder="在此输入数据库结构描述、业务规则或其他知识..." required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="database_qa.modal_cancel">取消</button>
+                <button type="button" class="btn btn-primary" id="submit-documentation" data-i18n="database_qa.modal_submit">提交</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 确认添加问答对模态框 -->
+<div class="modal fade" id="confirmAddQaModal" tabindex="-1" aria-labelledby="confirmAddQaModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmAddQaModalLabel" data-i18n="database_qa.confirm_add_reference">确认添加参考数据</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p data-i18n="database_qa.confirm_add_qa_message">确定要将以下问答对添加到参考数据吗？</p>
+                <div class="mb-2">
+                    <strong data-i18n="database_qa.confirm_question">问题:</strong>
+                    <p id="confirm-qa-question" class="bg-light p-2 rounded"></p>
+                </div>
+                <div>
+                    <strong data-i18n="database_qa.confirm_sql">SQL:</strong>
+                    <pre><code id="confirm-qa-sql" class="bg-light p-2 rounded d-block"></code></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="database_qa.modal_cancel">取消</button>
+                <button type="button" class="btn btn-primary" id="confirm-add-qa-btn" data-i18n="database_qa.confirm_add_button">确定添加</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block additional_scripts %}
+<!-- 使用Plotly.js替代Chart.js -->
+<script src="{{ url_for('static', filename='js/vendor/plotly.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vendor/purify.min.js') }}"></script>
+
+<script>
+    let currentSessionId = null;
+    let currentMessages = [];
+    let charts = {};
+    let allTrainingData = []; // Store all training data
+    
+    $(document).ready(function() {
+        // 初始化状态变量
+        window.databaseConnected = false;
+        window.currentDatabaseName = "";
+        window.currentDatabaseType = "";
+        
+        // 初始化标签页状态 - 先隐藏参考数据标签页，只显示问答标签页
+        $('.main-tab-content').hide();
+        $('#qa-tab').show();
+        
+        // 确保初始状态下左侧边栏可见，内容区域有正确的margin
+        $('.left-sidebar').show();
+        $('.content-area').css({
+            'margin-left': '',
+            'width': ''
+        });
+        
+        // 标签页切换逻辑 - 完全替换原来的代码
+        $('.tab-button').off('click').on('click', function() {
+            const target = $(this).data('target');
+            console.log("Tab button clicked:", target);
+            
+            // 激活主标签按钮样式
+            $('.tab-button').removeClass('active');
+            $(this).addClass('active');
+            
+            // 隐藏所有主标签页内容
+            $('.main-tab-content').hide();
+            
+            // 显示目标标签页内容
+            $('#' + target).show();
+            
+            // 根据选择的标签页控制左侧边栏显示
+            if (target === 'reference-data-tab') {
+                // 参考数据页：隐藏左侧边栏，扩展内容区域
+                $('.left-sidebar').hide();
+                $('.content-area').css({
+                    'width': '100%'
+                });
+                
+                // Explicitly set default sub-tab *before* loading data
+                // 1. Deactivate all cards and panes first
+                $('.data-card').removeClass('active');
+                $('#reference-data-pills-content .tab-pane').removeClass('show active');
+                // 2. Activate the default (SQL QA) card and pane
+                $('#pills-sql-qa-card').addClass('active');
+                $('#pills-sql-qa').addClass('show active');
+                console.log("Set default reference sub-tab to SQL QA."); // Add log for debugging
+                
+                // 加载参考数据
+                loadTrainingData();
+                
+                // 初始化国际化内容
+                updateAllI18nContent();
+                
+                // 确保默认选择SQL问答对卡片
+                // REMOVED problematic setTimeout for activation here
+            } else if (target === 'qa-tab') {
+                // 问答页：显示左侧边栏，恢复内容区域
+                $('.left-sidebar').show();
+                $('.content-area').css({
+                    'width': ''
+                });
+                
+                // 重新初始化问答界面中的图表
+                setTimeout(() => {
+                    // 对每个可视化数据重新渲染
+                    currentMessages.forEach(function(message) {
+                        if (message.visualization) {
+                            try {
+                                let visualizationData = message.visualization;
+                                if (typeof visualizationData === 'string') {
+                                    visualizationData = JSON.parse(visualizationData);
+                                }
+                                renderMessageChart(message.id, visualizationData);
+                            } catch (e) {
+                                console.error('重新渲染图表失败:', e);
+                            }
+                        }
+                    });
+                    
+                    // 重新初始化问答界面的消息标签页
+                    initMessageTabs();
+                }, 100);
+            }
+        });
+
+        // 替换现有的子标签页事件绑定 (确保处理所有卡片)
+        $('.data-card').off('click').on('click', function() { // Re-bind after potentially adding new elements dynamically
+            const targetPaneId = $(this).data('target');
+            const targetPaneElement = document.querySelector(targetPaneId);
+            
+            if (targetPaneElement) {
+                // Deactivate all other cards and panes manually first
+                $('.data-card').removeClass('active');
+                $('#reference-data-pills-content .tab-pane').removeClass('show active');
+
+                // Activate the clicked card
+                $(this).addClass('active');
+
+                // Activate the target pane
+                $(targetPaneElement).addClass('show active');
+
+                // Optional: Trigger resize if content needs layout adjustment
+                setTimeout(() => {
+                    $(window).trigger('resize');
+                     // If the target is a chart container, re-render charts inside it
+                    if ($(targetPaneId).find('.chart-result-container').length > 0) {
+                        $(targetPaneId).find('.chart-result-container').each(function() {
+                            const messageId = $(this).data('message-id');
+                            const message = currentMessages.find(m => m.id.toString() === messageId.toString());
+                            if (message && message.visualization) {
+                                 renderMessageChart(messageId, message.visualization);
+                            }
+                        });
+                    }
+                }, 50); // Reduce delay slightly
+            } else {
+                console.error(`Target pane ${targetPaneId} not found for card click.`);
+            }
+        });
+        
+        // 加载会话列表
+        loadSessions();
+        
+        // 加载数据库和模型信息
+        checkDatabaseConnection();
+        loadModels();
+        
+
+        
+        // 加载自动命名设置状态
+        loadNamingSettings();
+        
+        // 发送问题按钮点击
+        $('#send-btn').click(function() {
+            sendQuestion();
+        });
+        
+        // 回车键发送问题，Shift+Enter换行
+        $('#question-input').keydown(function(e) {
+            // 如果是回车键，并且没有按下Shift键
+            if (e.which == 13 && !e.shiftKey) {
+                e.preventDefault();
+                sendQuestion();
+                return false;
+            }
+        });
+        
+        // 自动调整高度
+        $('#question-input').on('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+        
+        // 新建会话按钮点击
+        $('#new-session-btn').click(createNewSession);
+        
+        // 保存设置按钮点击
+        $('#save-settings-btn').click(saveSessionSettings);
+        
+
+        
+        // 导出对话按钮点击
+        $('#export-chat-btn').click(exportChat);
+        
+        // 清空对话按钮点击
+        $('#clear-chat-btn').click(clearChat);
+        
+        // 添加锁定表按钮点击
+        $('#lock-table-btn').click(toggleTableLock);
+        
+        // 自动命名开关点击
+        $('#auto-naming-switch').change(toggleAutoNaming);
+
+        // Load training data when document is ready
+        loadTrainingData();
+        
+        // Initialize all i18n content on page load
+        updateAllI18nContent();
+
+        // 监听语言切换事件，重新渲染session列表
+        if (window.i18n) {
+            window.i18n.on('languageChanged', function(data) {
+                console.log('语言切换事件触发，重新渲染session列表');
+                // 重新渲染session列表以更新语言
+                loadSessions();
+                // 更新所有国际化内容
+                updateAllI18nContent();
+            });
+        }
+
+        // Add event listener for tab clicks to potentially reload data if needed
+        $('.tab-button[data-target="reference-data-tab"]').click(function() {
+            // Optional: Reload data every time the tab is clicked
+            // loadTrainingData(); 
+        });
+
+        // Event delegation for delete buttons inside the dynamic content
+        $(document).on('click', '.delete-training-item-btn', function() {
+            const itemId = $(this).data('id');
+            deleteTrainingItem(itemId);
+        });
+
+        // 初始化所有Bootstrap标签页组件
+        initAllTabs();
+
+        // 绑定新的添加DDL按钮提示
+        $('#add-ddl-btn').click(function() {
+            // 使用更友好的提示，例如Bootstrap的Toast或Popover，但简单alert也可以
+            i18nHelper.showTranslatedAlert('database_qa.add_ddl_hint');
+            // 或者，如果数据管理页面有固定URL，可以跳转
+            // window.location.href = '/data-management'; // 假设的URL
+        });
+    });
+    
+    // 更新所有国际化内容的函数
+    function updateAllI18nContent() {
+        // 更新所有带有 data-i18n 属性的元素
+        $('[data-i18n]').each(function() {
+            const key = $(this).attr('data-i18n');
+            $(this).text(i18nHelper.t(key));
+        });
+        
+        // 更新所有带有 data-i18n-placeholder 属性的元素
+        $('[data-i18n-placeholder]').each(function() {
+            const key = $(this).attr('data-i18n-placeholder');
+            $(this).attr('placeholder', i18nHelper.t(key));
+        });
+        
+        // 更新所有带有 data-i18n-title 属性的元素
+        $('[data-i18n-title]').each(function() {
+            const key = $(this).attr('data-i18n-title');
+            $(this).attr('title', i18nHelper.t(key));
+        });
+    }
+    
+    // 检查数据库连接状态
+    function checkDatabaseConnection() {
+        console.log("检查数据库连接状态...");
+        
+        i18nHelper.updateElementText('#database-info', 'js.checking_connection');
+        $('#table-select').html('<option value="">-- 检查中... --</option>');
+        
+        $.ajax({
+            url: '/api/databases',
+            type: 'GET',
+            success: function(response) {
+                console.log("数据库API响应:", response);
+                
+                if (response.status === 'success' && 
+                    Array.isArray(response.databases) && 
+                    response.databases.length > 0) {
+                    
+                    const db = response.databases[0];
+                    console.log("数据库已连接:", db);
+                    
+                    // 设置数据库状态
+                    window.databaseConnected = true;
+                    window.currentDatabaseName = db.name;
+                    window.currentDatabaseType = db.display_name.split(' - ')[0] || 'MySQL';
+                    
+                    // 更新UI
+                    $('#database-info').html(`<strong>${window.currentDatabaseType}:</strong> ${window.currentDatabaseName}`);
+                    
+                    // 加载数据表
+                    loadDatabaseTables();
+                } else {
+                    // 数据库未连接
+                    window.databaseConnected = false;
+                    window.currentDatabaseName = "";
+                    window.currentDatabaseType = "";
+                    
+                    $('#database-info').text("-- 未连接到数据库 --");
+                    $('#table-select').html(`<option value="">${i18nHelper.t('js.no_available_tables')}</option>`);
+                    console.warn("未检测到已连接的数据库");
+                }
+            },
+            error: function(xhr, status, error) {
+                // 连接错误
+                window.databaseConnected = false;
+                window.currentDatabaseName = "";
+                window.currentDatabaseType = "";
+                
+                console.error("数据库连接检查失败:", error, xhr.responseText);
+                $('#database-info').text("连接错误");
+                $('#table-select').html(`<option value="">${i18nHelper.t('js.cannot_load_tables')}</option>`);
+            }
+        });
+    }
+    
+    // 加载数据库表
+    function loadDatabaseTables() {
+        if (!window.currentDatabaseName) {
+            console.warn("尝试加载表但数据库名为空");
+            $('#table-select').html('<option value="">-- 请先连接数据库 --</option>');
+            return;
+        }
+        
+        console.log(`加载数据库 ${window.currentDatabaseName} 的表...`);
+                    $('#table-select').html(`<option value="">${i18nHelper.t('js.loading_tables')}</option>`);
+        
+        $.ajax({
+            url: `/api/databases/${window.currentDatabaseName}/tables`,
+            type: 'GET',
+            success: function(response) {
+                console.log("数据表API响应:", response);
+                
+                if (response.status === 'success' && Array.isArray(response.tables)) {
+                    console.log(`找到 ${response.tables.length} 个表`);
+                    
+                    if (response.tables.length > 0) {
+                        let optionsHTML = `<option value="">${i18nHelper.t('js.select_data_table')}</option>`;
+                        response.tables.forEach(table => {
+                            optionsHTML += `<option value="${table.name}">${table.display_name || table.name}</option>`;
+                        });
+                        
+                        $('#table-select').html(optionsHTML);
+                        console.log("已成功加载数据表列表");
+                    } else {
+                        $('#table-select').html('<option value="">-- 数据库中没有表 --</option>');
+                        console.warn("数据库中没有表");
+                    }
+                } else {
+                    $('#table-select').html(`<option value="">${i18nHelper.t('js.no_available_tables')}</option>`);
+                    console.warn("加载数据表失败:", response);
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#table-select').html(`<option value="">${i18nHelper.t('js.load_tables_failed')}</option>`);
+                console.error("加载数据表出错:", error, xhr.responseText);
+            }
+        });
+    }
+    
+    // 更新会话设置UI
+    function updateSessionSettings(session) {
+        console.log("更新会话设置:", session);
+        
+        // 处理锁定表与表名不匹配的情况
+        if (session.is_table_locked && !session.table_name) {
+            console.log("警告：会话标记为表锁定但没有表名");
+            session.is_table_locked = false;
+        }
+        
+        // 设置表的选择（仅在未锁定时需要）
+        if (session.table_name && window.databaseConnected && !session.is_table_locked) {
+            setTimeout(function() {
+                $('#table-select').val(session.table_name);
+                console.log(`已选择表: ${session.table_name}`);
+            }, 1000);
+        }
+        
+        // 更新模型选择
+        if (session.model_name) {
+            $('#model-select').val(session.model_name);
+        }
+        
+        // 更新表锁定状态
+        if (session.is_table_locked && session.table_name) {
+            // 禁用表选择
+            $('#table-select').prop('disabled', true);
+            
+            // 更新锁定按钮状态
+            $('#lock-table-btn').html('<i class="fas fa-unlock-alt"></i>');
+            $('#lock-table-btn').attr('title', '解锁表');
+            $('#lock-table-btn').data('action', 'unlock');
+            $('#lock-table-btn').removeClass('btn-outline-primary').addClass('btn-outline-warning');
+        } else {
+            // 启用表选择
+            $('#table-select').prop('disabled', false);
+            
+            // 更新锁定按钮状态
+            $('#lock-table-btn').html('<i class="fas fa-lock"></i>');
+            $('#lock-table-btn').attr('title', '锁定表');
+            $('#lock-table-btn').data('action', 'lock');
+            $('#lock-table-btn').removeClass('btn-outline-warning').addClass('btn-outline-primary');
+        }
+        
+        // 更新 auto_train 开关状态
+        $('#auto-train-switch').prop('checked', session.auto_train !== false); // 默认为 true
+        console.log(`设置 auto_train 开关状态: ${session.auto_train !== false}`);
+    }
+    
+    // 切换表锁定状态
+    function toggleTableLock() {
+        if (!currentSessionId) return;
+        
+        const action = $(this).data('action');
+        const lockStatus = action === 'lock';
+        
+        // 检查是否有选择表
+        const tableName = $('#table-select').val();
+        if (lockStatus && !tableName) {
+            showError(i18nHelper.t('js.please_select_table_first'));
+            return;
+        }
+        
+        // 锁定前确保保存会话设置，这样表名会被正确保存
+        if (lockStatus) {
+            saveSessionSettings(function() {
+                // 保存成功后再锁定表
+                sendToggleLockRequest(lockStatus);
+            });
+        } else {
+            // 解锁直接发送请求
+            sendToggleLockRequest(lockStatus);
+        }
+    }
+    
+    // 发送表锁定/解锁请求
+    function sendToggleLockRequest(lockStatus) {
+        $.ajax({
+            url: `/api/toggle-table-lock/${currentSessionId}`,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                lock_status: lockStatus
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    if (lockStatus) {
+                        showSuccess(i18nHelper.t('js.table_locked'));
+                    } else {
+                        showSuccess(i18nHelper.t('js.table_unlocked'));
+                    }
+                    
+                    // 更新UI
+                    const session = response.session;
+                    updateSessionSettings(session);
+                    
+                    // 刷新会话列表
+                    loadSessions();
+                } else {
+                    showError('切换表锁定状态失败: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                showError('切换表锁定状态失败: ' + xhr.responseText);
+            }
+        });
+    }
+    
+    async function streamAskQuestion(requestPayload, onEvent) {
+        const response = await fetch('/api/ask/stream', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestPayload)
+        });
+
+        if (!response.ok || !response.body) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            let newlineIndex = buffer.indexOf('\n');
+            while (newlineIndex !== -1) {
+                const line = buffer.slice(0, newlineIndex).trim();
+                buffer = buffer.slice(newlineIndex + 1);
+
+                if (line) {
+                    try {
+                        onEvent(JSON.parse(line));
+                    } catch (e) {
+                        console.warn('忽略无法解析的流式行:', line, e);
+                    }
+                }
+
+                newlineIndex = buffer.indexOf('\n');
+            }
+        }
+
+        const tail = buffer.trim();
+        if (tail) {
+            try {
+                onEvent(JSON.parse(tail));
+            } catch (e) {
+                console.warn('忽略无法解析的流式尾数据:', tail, e);
+            }
+        }
+    }
+
+    // 发送问题
+    async function sendQuestion() {
+        const question = $('#question-input').val().trim();
+        if (!question || !currentSessionId) {
+            return;
+        }
+        
+        if (!window.databaseConnected) {
+            showError(i18nHelper.t('common.please_connect_database'));
+            return;
+        }
+        
+        const tableName = $('#table-select').val();
+        
+        // 清空输入框
+        $('#question-input').val('');
+        $('#question-input').css('height', 'auto');
+        
+        // 锁定输入框和发送按钮
+        $('#question-input').prop('disabled', true);
+        $('#send-btn').prop('disabled', true);
+        
+        // --- BEGIN ADDED CODE ---
+        // 立即将用户消息添加到聊天界面
+        const userMessageHtml = `
+            <div class="message user-message">
+                <div class="message-icon">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="message-bubble">
+                    <div class="message-content">${$('<div>').text(question).html()}</div> 
+                </div>
+            </div>
+        `;
+        $('#chat-messages').append(userMessageHtml);
+        scrollToBottom();
+
+        const streamingMessageId = `streaming-${Date.now()}`;
+        const streamingMessageHtml = `
+            <div class="message ai-message" data-id="${streamingMessageId}">
+                <div class="message-icon">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="message-bubble stream-live-bubble">
+                    <div class="message-content">
+                        <div class="stream-status-wrap" id="stream-status-${streamingMessageId}">
+                            <div class="stream-status-head">
+                                <span id="stream-status-text-${streamingMessageId}">${i18nHelper.t('database_qa.stream.connecting')}</span>
+                                <span id="stream-status-percent-${streamingMessageId}">0%</span>
+                            </div>
+                            <div class="stream-progress">
+                                <div class="stream-progress-bar" id="stream-progress-bar-${streamingMessageId}"></div>
+                            </div>
+                        </div>
+                        <div class="explanation-text" id="streaming-content-${streamingMessageId}"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        $('#chat-messages').append(streamingMessageHtml);
+        scrollToBottom();
+        
+        // 添加正在输入指示器
+        addTypingIndicator();
+            
+        const streamingContentEl = $(`#streaming-content-${streamingMessageId}`);
+        const streamStatusTextEl = $(`#stream-status-text-${streamingMessageId}`);
+        const streamStatusPercentEl = $(`#stream-status-percent-${streamingMessageId}`);
+        const streamProgressBarEl = $(`#stream-progress-bar-${streamingMessageId}`);
+        let streamedText = '';
+        let streamEnded = false;
+        let renderScheduled = false;
+
+        function getStreamStageLabel(stage, fallbackMessage) {
+            const stageMap = {
+                prepare: 'database_qa.stream.stage_prepare',
+                sql: 'database_qa.stream.stage_sql',
+                process: 'database_qa.stream.stage_process',
+                summary: 'database_qa.stream.stage_summary',
+                persist: 'database_qa.stream.stage_persist',
+                done: 'database_qa.stream.stage_done'
+            };
+
+            if (stage && stageMap[stage]) {
+                return i18nHelper.t(stageMap[stage]);
+            }
+            if (fallbackMessage) {
+                return fallbackMessage;
+            }
+            return i18nHelper.t('database_qa.stream.processing');
+        }
+
+        function renderStreamingMarkdown(force = false) {
+            if (renderScheduled && !force) {
+                return;
+            }
+
+            renderScheduled = true;
+            requestAnimationFrame(function() {
+                streamingContentEl.html(renderMarkdown(streamedText));
+                scrollToBottom();
+                renderScheduled = false;
+            });
+        }
+
+        function updateStreamStatus(message, progress, done = false) {
+            const safeProgress = Math.max(0, Math.min(100, Number(progress || 0)));
+            streamStatusTextEl.text(message || i18nHelper.t('database_qa.stream.processing'));
+            streamStatusPercentEl.text(`${safeProgress}%`);
+            streamProgressBarEl.css('width', `${safeProgress}%`);
+
+            if (done) {
+                streamProgressBarEl.addClass('done');
+            }
+        }
+
+        try {
+            await streamAskQuestion(
+                {
+                    question: question,
+                    session_id: currentSessionId,
+                    database_name: window.currentDatabaseName,
+                    table_name: tableName
+                },
+                function(event) {
+                    if (event.type === 'start') {
+                        removeTypingIndicator();
+                        updateStreamStatus(i18nHelper.t('database_qa.stream.connected'), 5, false);
+                        return;
+                    }
+
+                    if (event.type === 'status') {
+                        const statusText = getStreamStageLabel(event.stage, event.message);
+                        updateStreamStatus(statusText, event.progress || 0, event.stage === 'done');
+                        return;
+                    }
+
+                    if (event.type === 'chunk') {
+                        streamedText += event.delta || '';
+                        renderStreamingMarkdown(false);
+                        return;
+                    }
+
+                    if (event.type === 'meta') {
+                        if (event.payload && event.payload.explanation) {
+                            streamedText = event.payload.explanation;
+                            renderStreamingMarkdown(true);
+                        }
+                        return;
+                    }
+
+                    if (event.type === 'error') {
+                        streamedText += `\n\n${i18nHelper.t('database_qa.stream.error_prefix')}: ${event.message || i18nHelper.t('database_qa.error_occurred')}`;
+                        renderStreamingMarkdown(true);
+                        updateStreamStatus(i18nHelper.t('database_qa.stream.failed'), 100, true);
+                        return;
+                    }
+
+                    if (event.type === 'end') {
+                        streamEnded = true;
+                        updateStreamStatus(i18nHelper.t('database_qa.stream.stage_done'), 100, true);
+                        renderStreamingMarkdown(true);
+                    }
+                }
+            );
+        } catch (e) {
+            removeTypingIndicator();
+            streamedText += `\n\n${i18nHelper.t('database_qa.stream.request_failed_prefix')}: ${e.message}`;
+            renderStreamingMarkdown(true);
+            updateStreamStatus(i18nHelper.t('database_qa.stream.request_failed'), 100, true);
+        } finally {
+            removeTypingIndicator();
+
+            if (streamEnded) {
+                loadMessages(currentSessionId);
+                setTimeout(function() {
+                    loadSessions();
+                }, 1000);
+            }
+
+            $('#question-input').prop('disabled', false);
+            $('#send-btn').prop('disabled', false);
+            $('#question-input').focus();
+        }
+    }
+    
+    // 保存会话设置
+    function saveSessionSettings(callback) {
+        if (!currentSessionId) return;
+        
+        const tableName = $('#table-select').val();
+        const autoTrain = $('#auto-train-switch').is(':checked'); // 读取开关状态
+        
+        console.log(`保存会话设置 - 表名: ${tableName}, auto_train: ${autoTrain}`); 
+        
+        $.ajax({
+            url: `/api/chat-sessions/${currentSessionId}`,
+            type: 'PUT',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                table_name: tableName,
+                auto_train: autoTrain // 发送 auto_train 设置
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log("会话设置已保存:", response.session);
+                    if (response.session) {
+                        updateSessionSettings(response.session);
+                    }
+                    loadSessions();
+                    if (typeof callback === 'function') {
+                        callback();
+                    }
+                } else {
+                    showError('保存会话设置失败: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                showError('保存会话设置失败: ' + xhr.responseText);
+            }
+        });
+    }
+
+    // 加载会话列表
+    function loadSessions() {
+        $.ajax({
+            url: '/api/chat-sessions',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    renderSessionsList(response.sessions);
+                } else {
+                    showError('加载会话列表失败: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                showError('加载会话列表失败: ' + xhr.responseText);
+            }
+        });
+    }
+    
+    // 渲染会话列表
+    function renderSessionsList(sessions) {
+        if (sessions.length === 0) {
+            $('#sessions-list').html(`<div class="no-sessions">${i18nHelper.t('common.no_sessions')}</div>`);
+            return;
+        }
+        
+        let html = '';
+        sessions.forEach(function(session) {
+            const date = new Date(session.updated_at);
+            const formattedDate = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            
+            // 添加表名和锁定状态图标
+            const tableInfo = session.table_name ? 
+                `<div><small>${i18nHelper.t('common.table_label')}: ${session.table_name} ${session.is_table_locked ? 
+                    `<i class="fas fa-lock text-warning" title="${i18nHelper.t('common.table_locked')}"></i>` : 
+                    `<i class="fas fa-unlock-alt text-muted" title="${i18nHelper.t('common.table_unlocked')}"></i>`}</small></div>` : '';
+            
+            html += `
+                <div class="session-item" data-id="${session.id}">
+                    <button class="delete-session-btn" title="${i18nHelper.t('common.delete_session')}">&times;</button>
+                    <strong>${session.name || i18nHelper.t('common.unnamed_session')}</strong>
+                    ${tableInfo}
+                    <div><small>${i18nHelper.t('common.message_count')}: ${session.message_count}</small></div>
+                    <div><small>${i18nHelper.t('common.updated_at')}: ${formattedDate}</small></div>
+                </div>
+            `;
+        });
+        
+        $('#sessions-list').html(html);
+        
+        // 绑定会话点击事件 (确保不触发删除按钮)
+        $('.session-item').on('click', function(e) {
+            // 如果点击的是删除按钮，则不执行选择会话的操作
+            if ($(e.target).hasClass('delete-session-btn')) {
+                return;
+            }
+            const sessionId = $(this).data('id');
+            selectSession(sessionId);
+        });
+
+        // 绑定删除按钮点击事件
+        $('.delete-session-btn').click(function(e) {
+            e.stopPropagation(); // 阻止事件冒泡到父元素
+            const sessionId = $(this).closest('.session-item').data('id');
+            deleteSession(sessionId);
+        });
+        
+        // 如果当前没有选中的会话，或者当前选中的会话已被删除
+        if ((!currentSessionId || !$(`.session-item[data-id="${currentSessionId}"]`).length) && sessions.length > 0) {
+            selectSession(sessions[0].id);
+        } else if (sessions.length === 0) {
+            // 如果没有会话了，重置UI
+            resetChatArea();
+            currentSessionId = null;
+        } else if (currentSessionId && $(`.session-item[data-id="${currentSessionId}"]`).length) {
+            // 确保当前选中的会话仍然高亮
+            $(`.session-item[data-id="${currentSessionId}"]`).addClass('active');
+        }
+    }
+    
+    // 选择会话
+    function selectSession(sessionId) {
+        currentSessionId = sessionId;
+        
+        // 更新UI
+        $('.session-item').removeClass('active');
+        $(`.session-item[data-id="${sessionId}"]`).addClass('active');
+        
+        // 启用输入框和发送按钮
+        $('#question-input').prop('disabled', false);
+        $('#send-btn').prop('disabled', false);
+        $('#question-input').focus();
+        
+        // 检查数据库连接状态（确保UI正确显示）
+        if (!window.databaseConnected) {
+            checkDatabaseConnection();
+        }
+        
+        // 加载会话信息
+        $.ajax({
+            url: `/api/chat-sessions/${sessionId}`,
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    const session = response.session;
+                    console.log("加载会话信息成功:", session);
+                    
+                    // 处理锁定表与表名不匹配的情况
+                    if (session.is_table_locked && !session.table_name) {
+                        console.log("错误：会话标记为锁定但没有表名，自动修复状态");
+                        // 自动修复锁定状态
+                        $.ajax({
+                            url: `/api/toggle-table-lock/${currentSessionId}`,
+                            type: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({
+                                lock_status: false
+                            }),
+                            success: function(unlockResponse) {
+                                console.log("已自动解除表锁定状态");
+                                if (unlockResponse.status === 'success') {
+                                    // 使用更新后的会话信息
+                                    session.is_table_locked = false;
+                                }
+                                // 继续加载表和更新设置
+                                loadDatabaseTables();
+                                updateSessionSettings(session);
+                            },
+                            error: function() {
+                                console.error("无法自动解除表锁定状态");
+                                // 仍然继续加载表
+                                loadDatabaseTables();
+                                updateSessionSettings(session);
+                            }
+                        });
+                        return;
+                    }
+                    
+                    // 1. 先检查是否有锁定的表，如果有则直接设置表选择器
+                    if (session.is_table_locked && session.table_name) {
+                        console.log(`会话有锁定的表: ${session.table_name}`);
+                        $('#table-select').html(`<option value="${session.table_name}">${session.table_name}</option>`);
+                        $('#table-select').prop('disabled', true);
+                    } 
+                    // 2. 如果没有锁定表但有选定的表，确保在加载表列表后选中该表
+                    else if (session.table_name) {
+                        console.log(`会话有选定的表但未锁定: ${session.table_name}`);
+                        // 先加载表列表，然后在updateSessionSettings中选择特定的表
+                        loadDatabaseTables();
+                    } else {
+                        // 没有表名，加载所有表
+                        console.log("会话没有选定表，加载所有表");
+                        loadDatabaseTables();
+                    }
+                    
+                    // 更新其他会话设置
+                    updateSessionSettings(session);
+                }
+            },
+            error: function(xhr) {
+                console.error("加载会话信息失败:", xhr.responseText);
+            }
+        });
+        
+        // 加载会话消息
+        loadMessages(sessionId);
+    }
+    
+    // 删除会话
+    function deleteSession(sessionId) {
+        if (!sessionId) return;
+
+        if (confirm(i18nHelper.t('kg_qa.confirm_delete_session'))) {
+            $.ajax({
+                url: `/api/chat-sessions/${sessionId}`,
+                type: 'DELETE',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        i18nHelper.showTranslatedSuccess('kg_qa.session_deleted');
+                        // 刷新会话列表
+                        loadSessions(); 
+                        // 如果删除的是当前会话，则在 loadSessions 内部处理选择新会话的逻辑
+                    } else {
+                        i18nHelper.showTranslatedError('kg_qa.delete_session_failed', { message: response.message });
+                    }
+            },
+            error: function(xhr) {
+                i18nHelper.showTranslatedError('kg_qa.delete_session_failed', { error: xhr.responseText });
+                }
+            });
+        }
+    }
+    
+    // 加载会话消息
+    function loadMessages(sessionId) {
+        $.ajax({
+            url: `/api/chat-sessions/${sessionId}/messages`,
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    currentMessages = response.messages;
+                    renderMessages(response.messages);
+                } else {
+                    showError('加载消息失败: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                showError('加载消息失败: ' + xhr.responseText);
+            }
+        });
+    }
+    
+    // 渲染消息
+    function renderMessages(messages) {
+        // 清除旧图表
+        charts = {};
+        
+        if (messages.length === 0) {
+            $('#chat-messages').html(`
+                <div class="message ai-message">
+                    <div class="message-icon">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-bubble">
+                        <div class="message-content">
+                            <p>${i18nHelper.t('database_qa.welcome_message')}</p>
+                        </div>
+                    </div>
+                </div>
+            `);
+            return;
+        }
+        
+        let html = '';
+        messages.forEach(function(message, index) {
+            if (message.role === 'user') {
+                html += `
+                    <div class="message user-message" data-id="${message.id}">
+                        <div class="message-icon">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="message-bubble">
+                            <div class="message-content">${message.content}</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // AI 消息
+                const hasSql = message.sql && message.sql.trim() !== '';
+                // 修改判断条件，更宽松地检查result和visualization是否存在
+                const hasResult = !!message.result && (
+                    // 如果是已解析的对象
+                    (typeof message.result === 'object' && message.result !== null) ||
+                    // 如果是JSON字符串
+                    (typeof message.result === 'string' && message.result.trim() !== '')
+                );
+                const hasVisualization = !!message.visualization && (
+                    // 如果是已解析的对象
+                    (typeof message.visualization === 'object' && message.visualization !== null) ||
+                    // 如果是JSON字符串
+                    (typeof message.visualization === 'string' && message.visualization.trim() !== '')
+                );
+                const tabsId = `result-tabs-${message.id}`;
+                
+                // 调试信息
+                console.log(`消息 ${message.id} 数据状态:`, {
+                    hasSql,
+                    hasResult,
+                    hasVisualization,
+                    result: message.result,
+                    visualization: message.visualization
+                });
+
+                html += `
+                    <div class="message ai-message" data-id="${message.id}">
+                        <div class="message-icon">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="message-bubble">
+                            <div class="message-content">
+                                <!-- 1. 如果有思考过程，显示可折叠框（移动到解释文本之前） -->
+                                ${message.thinking ? `
+                                <div class="thinking-container mb-3">
+                                    <div class="accordion" id="thinking-${message.id}">
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header" id="thinking-header-${message.id}">
+                                                <button class="accordion-button collapsed" type="button" 
+                                                        data-bs-toggle="collapse" data-bs-target="#thinking-body-${message.id}" 
+                                                        aria-expanded="false" aria-controls="thinking-body-${message.id}">
+                                                    <i class="fas fa-brain me-2"></i> 查看思考过程
+                                                </button>
+                                            </h2>
+                                            <div id="thinking-body-${message.id}" class="accordion-collapse collapse" 
+                                                 aria-labelledby="thinking-header-${message.id}" data-bs-parent="#thinking-${message.id}">
+                                                <div class="accordion-body thinking-content">
+                                                    <pre>${message.thinking}</pre>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                ` : ''}
+                                
+                                <!-- 2. 显示解释文本 -->
+                                <div class="explanation-text">${renderMarkdown(message.content || message.explanation || i18nHelper.t('database_qa.received'))}</div>
+                                
+                                <!-- 3. 条件性渲染标签页 -->
+                                ${ (hasSql || hasResult || hasVisualization) ? `
+                                <div class="result-tabs mt-3">
+                                    <ul class="nav nav-tabs" id="${tabsId}" role="tablist">
+                                        ${hasSql ? `
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link active" id="${tabsId}-sql-tab" data-bs-toggle="tab" 
+                                                    data-bs-target="#${tabsId}-sql" type="button" role="tab" 
+                                                    aria-controls="${tabsId}-sql" aria-selected="true" data-i18n="database_qa.sql_statement">SQL语句</button>
+                                        </li>` : ''}
+                                        ${hasResult ? `
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link ${!hasSql ? 'active' : ''}" id="${tabsId}-data-tab" data-bs-toggle="tab" 
+                                                    data-bs-target="#${tabsId}-data" type="button" role="tab" 
+                                                    aria-controls="${tabsId}-data" aria-selected="${!hasSql}" data-i18n="database_qa.data_result">数据结果</button>
+                                        </li>` : ''}
+                                        ${hasVisualization ? `
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link ${!hasSql && !hasResult ? 'active' : ''}" id="${tabsId}-chart-tab" data-bs-toggle="tab" 
+                                                    data-bs-target="#${tabsId}-chart" type="button" role="tab" 
+                                                    aria-controls="${tabsId}-chart" aria-selected="${!hasSql && !hasResult}" data-i18n="database_qa.chart_tab">图表</button>
+                                        </li>` : ''}
+                                    </ul>
+                                    <div class="tab-content" id="${tabsId}-content">
+                                        ${hasSql ? `
+                                        <div class="tab-pane fade show active p-3 border border-top-0 rounded-bottom" 
+                                             id="${tabsId}-sql" role="tabpanel" aria-labelledby="${tabsId}-sql-tab">
+                                            <pre style="white-space: pre-wrap; word-wrap: break-word;"><code>${message.sql}</code></pre>
+                                        </div>` : ''}
+                                        ${hasResult ? `
+                                        <div class="tab-pane fade ${!hasSql ? 'show active' : ''} p-3 border border-top-0 rounded-bottom" 
+                                             id="${tabsId}-data" role="tabpanel" aria-labelledby="${tabsId}-data-tab">
+                                             ${renderDataContent(message.result)}
+                                        </div>` : ''}
+                                        ${hasVisualization ? `
+                                        <div class="tab-pane fade ${!hasSql && !hasResult ? 'show active' : ''} p-3 border border-top-0 rounded-bottom" 
+                                             id="${tabsId}-chart" role="tabpanel" aria-labelledby="${tabsId}-chart-tab">
+                                            <div class="chart-result-container" data-message-id="${message.id}" style="min-height: 300px; width: 100%;">
+                                                <!-- 图表将在此处渲染 -->
+                                            </div>
+                                        </div>` : ''}
+                                    </div>
+                                </div>
+                                ` : ''}
+                            </div>
+                            <div class="message-actions">
+                                <button class="btn btn-sm btn-outline-primary save-message-btn" data-id="${message.id}" data-i18n="database_qa.save_message">保存</button>
+                                ${hasSql ? `<button class="btn btn-sm btn-outline-secondary copy-sql-btn" data-id="${message.id}" data-i18n="database_qa.copy_sql_button">复制SQL</button>` : ''}
+                                <button class="btn btn-sm btn-outline-danger delete-message-btn" data-id="${message.id}" data-i18n="database_qa.delete_message">删除</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // 如果有可视化数据，稍后渲染图表
+                if (hasVisualization) {
+                    setTimeout(function() {
+                        try {
+                            // 确保 message.visualization 是对象
+                            let visualizationData = message.visualization;
+                            if (typeof visualizationData === 'string') {
+                                visualizationData = JSON.parse(visualizationData);
+                            }
+                            // 找到该消息中的图表容器（在图表标签页内）
+                            renderMessageChart(message.id, visualizationData);
+                        } catch (e) {
+                            console.error('准备渲染图表失败:', e);
+                            console.log('原始 visualization 数据:', message.visualization);
+                            // 可以在图表容器中显示错误消息
+                            const chartContainer = $(`#${tabsId}-chart .chart-result-container`);
+                            if (chartContainer.length > 0) {
+                                chartContainer.html('<div class="alert alert-danger">无法加载图表数据。</div>');
+                            }
+                        }
+                    }, 100);
+                }
+            }
+        });
+        
+        $('#chat-messages').html(html);
+        // 更新新生成内容的国际化
+        updateAllI18nContent();
+        scrollToBottom();
+        
+        // 绑定消息操作事件
+        $('.save-message-btn').click(function() {
+            const messageId = $(this).data('id');
+            // 调用新的函数来添加训练数据
+            addMessageAsTrainingData(messageId); 
+        });
+        
+        $('.copy-sql-btn').click(function() {
+            const messageId = $(this).data('id');
+            const message = currentMessages.find(m => m.id.toString() === messageId.toString());
+            if (message && message.sql) {
+                copyToClipboard(message.sql);
+                i18nHelper.showTranslatedSuccess('database_qa.sql_copied'); // 使用showSuccess替代alert
+            }
+        });
+        
+        $('.delete-message-btn').click(function() {
+            const messageId = $(this).data('id');
+            deleteMessage(messageId);
+        });
+        
+        // 确保标签页功能初始化
+        initMessageTabs();
+        
+        // 给思考过程添加复制按钮
+        /* // 注释掉添加复制按钮的代码
+        $('.thinking-content').each(function() {
+            $(this).append(`
+                <div class="mt-2 text-end">
+                    <button class="btn btn-sm btn-outline-secondary copy-thinking-btn">
+                        <i class="fas fa-copy me-1"></i>复制
+                    </button>
+                </div>
+            `);
+        });
+        */ // 结束注释
+    }
+    
+    // 渲染消息中的图表
+    function renderMessageChart(messageId, visualization) {
+        // 若visualization为null或undefined，则退出
+        if (!visualization) {
+            console.warn(`消息 ${messageId} 的图表数据为空`);
+            return;
+        }
+        
+        // 查找图表容器 - 基于 data-message-id 属性查找更可靠
+        const chartContainer = $(`.chart-result-container[data-message-id="${messageId}"]`);
+        if (chartContainer.length === 0) { 
+            console.warn(`未找到消息 ${messageId} 的图表容器`);
+            return;
+        }
+        
+        // 获取图表容器DOM元素
+        const chartElement = chartContainer[0];
+        
+        // 清空现有图表
+        Plotly.purge(chartElement);
+        
+        // 如果visualization是字符串，尝试解析为JSON
+        let visualizationData = visualization;
+        try {
+            if (typeof visualization === 'string') {
+                visualizationData = JSON.parse(visualization);
+            }
+            // 处理可能的不同数据结构
+            // 情况1: {data: [...], layout: {...}} - 标准Plotly格式
+            // 情况2: 数组本身就是数据
+            let plotlyData = [];
+            let layout = {};
+            
+            if (visualizationData.data && Array.isArray(visualizationData.data)) {
+                // 标准格式
+                plotlyData = visualizationData.data;
+                layout = visualizationData.layout || {};
+            } else if (Array.isArray(visualizationData)) {
+                // 直接是数据数组
+                plotlyData = visualizationData;
+            } else if (typeof visualizationData === 'object') {
+                // 单个跟踪对象
+                plotlyData = [visualizationData];
+            } else {
+                throw new Error('无法识别的图表数据格式');
+            }
+            
+            // 确保至少有一个跟踪对象
+            if (plotlyData.length === 0) {
+                chartContainer.html('<div class="alert alert-warning">图表数据为空</div>');
+                return;
+            }
+            
+            // 设置默认尺寸和主题
+            // 延迟一点获取宽度，确保容器已渲染
+            setTimeout(() => {
+                if (!layout.width) layout.width = chartElement.offsetWidth > 0 ? chartElement.offsetWidth : 600; // 提供默认值
+                if (!layout.height) layout.height = 400;
+                if (!layout.template) layout.template = 'plotly_white';
+                
+                try {
+                    Plotly.newPlot(chartElement, plotlyData, layout);
+                    console.log(`消息 ${messageId} 的图表已成功渲染`, {plotlyData, layout});
+                } catch (plotError) {
+                    console.error(`Plotly绘图错误:`, plotError);
+                    chartContainer.html(`<div class="alert alert-danger">图表渲染失败: ${plotError.message}</div>`);
+                }
+            }, 50); // 短暂延迟
+            
+        } catch (e) {
+            console.error(`创建消息 ${messageId} 的图表失败:`, e);
+            console.log('原始图表数据:', visualization);
+            chartContainer.html(`<div class="alert alert-danger">解析图表数据失败: ${e.message}</div>`);
+        }
+    }
+
+    // 创建新会话
+    function createNewSession() {
+        $.ajax({
+            url: '/api/chat-sessions',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                name: '新会话'
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // 刷新会话列表
+                    loadSessions();
+                    
+                    // 选择新创建的会话
+                    selectSession(response.session.id);
+                } else {
+                    showError('创建会话失败: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                showError('创建会话失败: ' + xhr.responseText);
+            }
+        });
+    }
+    
+    // 删除消息
+    function deleteMessage(messageId) {
+        if (!currentSessionId) return;
+        
+        $.ajax({
+            url: `/api/chat-sessions/${currentSessionId}/messages/${messageId}`,
+            type: 'DELETE',
+            success: function(response) {
+                if (response.status === 'success') {
+                    // 刷新消息列表
+                    loadMessages(currentSessionId);
+                } else {
+                    showError('删除消息失败: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                showError('删除消息失败: ' + xhr.responseText);
+            }
+        });
+    }
+    
+    
+    // 加载模型列表
+    function loadModels() {
+        // 获取全局配置
+        $.ajax({
+            url: '/api/config',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    // 全局变量存储当前系统使用的模型信息
+                    window.systemModelConfig = response.config.model || {};
+                    
+                    // 构建选择框选项 (移除)
+                    const modelConfig = window.systemModelConfig;
+                    const modelType = modelConfig.type || 'vanna';
+                    
+                    // 获取当前系统使用的模型名称
+                    let currentSystemModel = '';
+                    let modelDisplayName = ''; // 用于显示
+                    
+                    if (modelType === 'ollama') {
+                        currentSystemModel = modelConfig.ollama_model || '未指定';
+                        modelDisplayName = `Ollama: ${currentSystemModel}`;
+                    } else if (modelType === 'openai') {
+                        currentSystemModel = modelConfig.model_name || 'gpt-3.5-turbo';
+                        modelDisplayName = `OpenAI: ${currentSystemModel}`;
+                    } else if (modelType === 'vanna') {
+                        currentSystemModel = modelConfig.model_name || 'Vanna (默认)';
+                        modelDisplayName = `Vanna: ${currentSystemModel}`;
+                    } else {
+                        modelDisplayName = '未知模型类型';
+                    }
+                    
+                    console.log(`系统当前使用的模型类型: ${modelType}, 模型名称: ${currentSystemModel}`);
+                    
+                    // 更新模型信息显示区域
+                    $('#model-info').text(modelDisplayName);
+                    
+                    // 移除原有的模型选择逻辑
+                    /*
+                    if (modelType === 'ollama') {
+                        // ... (移除Ollama模型加载逻辑) ...
+                    } else if (modelType === 'openai') {
+                        // ... (移除OpenAI模型加载逻辑) ...
+                    } else if (modelType === 'vanna') {
+                        // ... (移除Vanna模型加载逻辑) ...
+                    }
+                    */
+                } else {
+                    $('#model-info').text("加载模型配置失败");
+                    console.error('加载模型配置失败:', response.message);
+                }
+            },
+            error: function(xhr) {
+                $('#model-info').text("加载模型配置错误");
+                console.error('加载模型配置错误:', xhr.responseText);
+            }
+        });
+    }
+    
+    // 添加正在输入指示器
+    function addTypingIndicator() {
+        const indicatorHTML = `
+            <div class="message ai-message typing-indicator" id="typing-indicator">
+                <div class="message-icon">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="message-bubble">
+                    <div class="message-content">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        $('#chat-messages').append(indicatorHTML);
+        scrollToBottom();
+    }
+    
+    // 移除正在输入指示器
+    function removeTypingIndicator() {
+        $('#typing-indicator').remove();
+    }
+    
+    // 聊天窗口滚动到底部
+    function scrollToBottom() {
+        const chatMessages = document.getElementById('chat-messages');
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    // 渲染Markdown (确保支持完整的Markdown语法)
+    function renderMarkdown(text) {
+        if (!text) return '';
+        
+        // 检查marked库是否可用
+        if (typeof marked === 'undefined') {
+            console.warn('Marked library not available, using fallback text rendering');
+            return simpleMarkdownFallback(text);
+        }
+        
+        // 检查DOMPurify是否可用
+        if (typeof DOMPurify === 'undefined') {
+            console.warn('DOMPurify library not available, using marked without sanitization');
+            try {
+                // 配置marked选项
+                marked.setOptions({
+                    gfm: true,
+                    breaks: true,
+                    smartLists: true,
+                    smartypants: true,
+                    highlight: function(code, lang) {
+                        return code;
+                    }
+                });
+                return marked.parse(text);
+            } catch (e) {
+                console.error('Marked parsing failed:', e);
+                return simpleMarkdownFallback(text);
+            }
+        }
+        
+        try {
+            // 配置marked选项以支持更多功能
+            marked.setOptions({
+                gfm: true, // GitHub风格Markdown
+                breaks: true, // 支持回车换行
+                smartLists: true, // 智能列表
+                smartypants: true, // 智能标点
+                highlight: function(code, lang) {
+                    // 可以在这里集成代码高亮库
+                    return code;
+                }
+            });
+            
+            // 使用 marked 和 DOMPurify
+            return DOMPurify.sanitize(marked.parse(text));
+        } catch (e) {
+            console.error('Markdown rendering failed:', e);
+            return simpleMarkdownFallback(text);
+        }
+    }
+    
+    // 简单的Markdown降级渲染函数
+    function simpleMarkdownFallback(text) {
+        if (!text) return '';
+        
+        // 转义HTML字符
+        const escapeHtml = (str) => {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        };
+        
+        let html = escapeHtml(text);
+        
+        // 处理常见的Markdown语法
+        // 粗体 **text** 或 __text__
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
+        
+        // 斜体 *text* 或 _text_
+        html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        html = html.replace(/_(.*?)_/g, '<em>$1</em>');
+        
+        // 代码 `code`
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+        
+        // 代码块 ```code```
+        html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+        
+        // 链接 [text](url)
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+        
+        // 换行
+        html = html.replace(/\n/g, '<br>');
+        
+        // 段落（双换行）
+        html = html.replace(/<br><br>/g, '</p><p>');
+        html = '<p>' + html + '</p>';
+        
+        // 列表项
+        html = html.replace(/^[-*+]\s(.+)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+        
+        // 标题
+        html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+        html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+        html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+        
+        return html;
+    }
+    
+    // 渲染自定义表格 (保持不变)
+    function renderCustomTable(tableData) {
+        if (!tableData || typeof tableData !== 'object') { // 检查tableData是否为对象
+            return '<div class="alert alert-warning">无效的表格数据格式</div>';
+        }
+        
+        // 如果tableData是字符串，尝试解析JSON
+        let parsedData = tableData;
+        if (typeof tableData === 'string') {
+            try {
+                parsedData = JSON.parse(tableData);
+            } catch (e) {
+                console.error('解析表格数据失败:', e);
+                return '<div class="alert alert-warning">无法解析表格数据</div>';
+            }
+        }
+        
+        // 尝试处理不同的数据结构
+        let columns = [];
+        let data = [];
+        
+        // 情况1: 标准格式 {columns: [...], data: [...]}
+        if (parsedData.columns && Array.isArray(parsedData.columns) && parsedData.data && Array.isArray(parsedData.data)) {
+            columns = parsedData.columns;
+            data = parsedData.data;
+        }
+        // 情况2: 如果结果是数组，可能是直接的行数据，尝试从第一行提取列名
+        else if (Array.isArray(parsedData) && parsedData.length > 0) {
+            // 假设第一行是列名
+            if (parsedData.length > 1) {
+                columns = Object.keys(parsedData[0]);
+                data = parsedData.map(row => Object.values(row));
+            } else {
+                return '<div class="alert alert-info">查询返回结果集为空</div>';
+            }
+        }
+        // 情况3: 如果是单个对象，显示键值对
+        else if (typeof parsedData === 'object' && parsedData !== null && !Array.isArray(parsedData)) {
+            columns = ['字段', '值'];
+            data = Object.entries(parsedData).map(([key, value]) => [key, value]);
+        }
+        // 情况4: 单一值的情况（如COUNT(*)查询）
+        else if (typeof parsedData === 'number' || typeof parsedData === 'string') {
+            columns = ['结果'];
+            data = [[parsedData]];
+        }
+        
+        if (columns.length === 0) {
+            return '<div class="alert alert-info">表格没有列数据</div>';
+        }
+        
+        let html = `
+            <div class="table-responsive">
+                <table class="table table-striped table-hover table-bordered table-sm"> <!-- 添加 table-sm 使表格更紧凑 -->
+                    <thead class="table-light"> <!-- 使用 table-light 替代 table-primary -->
+                        <tr>
+                            ${columns.map(col => `<th>${col}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        if (data.length === 0) {
+            html += `
+                <tr>
+                    <td colspan="${columns.length}" class="text-center text-muted">无数据</td> <!-- 添加 text-muted -->
+                </tr>
+            `;
+        } else {
+            html += data.map(row => `
+                <tr>
+                    ${columns.map((col, idx) => {
+                        // 确保 row 是数组并且索引有效
+                        const cell = Array.isArray(row) && idx < row.length ? row[idx] : undefined;
+                        let cellDisplay = '';
+                        if (cell === null || cell === undefined) {
+                            cellDisplay = '<em class="text-muted">NULL</em>';
+                        } else {
+                            cellDisplay = String(cell); // 转换为字符串
+                            if (cellDisplay.length > 100) { // 截断长文本
+                                cellDisplay = cellDisplay.substring(0, 100) + '...';
+                            }
+                            // 对特殊HTML字符进行转义，防止XSS
+                            cellDisplay = $('<div>').text(cellDisplay).html(); 
+                        }
+                        
+                        return `<td>${cellDisplay}</td>`;
+                    }).join('')}
+                </tr>
+            `).join('');
+        }
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-muted text-end small mt-1">共 ${data.length} 条记录</p> <!-- 调整边距和文本 -->
+        `;
+        
+        return html;
+    }
+    
+            // 处理数据渲染的函数
+    function renderDataContent(result) {
+        // 如果result不存在，返回提示信息
+        if (!result) {
+            return `<div class="alert alert-info" data-i18n="database_qa.no_data_result">无数据结果</div>`;
+        }
+        
+        // 如果是字符串，尝试解析为JSON
+        let parsedResult = result;
+        if (typeof result === 'string') {
+            try {
+                parsedResult = JSON.parse(result);
+            } catch (e) {
+                console.warn('无法解析结果数据:', e);
+                // 如果无法解析，直接显示文本
+                return `<pre>${$('<div>').text(result).html()}</pre>`;
+            }
+        }
+        
+        // 简单的数值结果直接显示
+        if (typeof parsedResult === 'number') {
+            return `<div class="alert alert-success" data-i18n="database_qa.query_result">查询结果: ${parsedResult}</div>`;
+        }
+        
+        // 使用渲染表格函数处理数据
+        return renderCustomTable(parsedResult);
+    }
+    
+    // 复制文本到剪贴板
+    function copyToClipboard(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+    }
+    
+    // 格式化日期
+    function formatDate(dateStr) {
+        if (!dateStr) return '';
+        
+        const date = new Date(dateStr);
+        return `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
+    }
+    
+    // 显示成功消息
+    function showSuccess(message) {
+        alert(message); // 简单起见，使用alert
+    }
+    
+    // 显示错误消息
+    function showError(message) {
+        alert('错误: ' + message); // 简单起见，使用alert
+    }
+    
+    // 导出对话
+    function exportChat() {
+        if (!currentSessionId || currentMessages.length === 0) {
+            showError(i18nHelper.t('common.no_exportable_chat'));
+            return;
+        }
+        
+        let exportContent = "# 数据库问答对话导出\n\n";
+        exportContent += `导出时间: ${formatDate(new Date())}\n\n`;
+        
+        currentMessages.forEach(function(message) {
+            if (message.role === 'user') {
+                exportContent += `## 问题\n${message.content}\n\n`;
+            } else {
+                exportContent += `## 回答\n${message.content}\n\n`;
+                if (message.sql) {
+                    exportContent += `### SQL\n\`\`\`sql\n${message.sql}\n\`\`\`\n\n`;
+                }
+            }
+        });
+        
+        // 创建下载链接
+        const blob = new Blob([exportContent], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        
+        // 设置文件名
+        const sessionName = $(`.session-item[data-id="${currentSessionId}"]`).find('strong').text() || i18nHelper.t('common.unnamed_session');
+        const timestamp = new Date().toISOString().replace(/:/g, '-').substring(0, 19);
+        
+        a.href = url;
+        a.download = `${sessionName}_${timestamp}.md`;
+        
+        // 触发下载
+        document.body.appendChild(a);
+        a.click();
+        
+        // 清理
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showSuccess('对话已导出');
+    }
+    
+    // 清空对话
+    function clearChat() {
+        if (!currentSessionId) {
+            showError(i18nHelper.t('common.no_selected_session'));
+            return;
+        }
+        
+        if (!confirm('确定要清空当前对话吗？此操作不可撤销。')) {
+            return;
+        }
+        
+        $.ajax({
+            url: `/api/chat-sessions/${currentSessionId}/messages`,
+            type: 'DELETE',
+            success: function(response) {
+                if (response.status === 'success') {
+                    // 刷新消息列表
+                    loadMessages(currentSessionId);
+                    showSuccess('对话已清空');
+                    
+                    // 刷新会话列表
+                    loadSessions();
+                } else {
+                    showError('清空对话失败: ' + response.message);
+                }
+            },
+            error: function(xhr) {
+                showError('清空对话失败: ' + xhr.responseText);
+            }
+        });
+    }
+
+    // 加载自动命名设置
+    function loadNamingSettings() {
+        $.ajax({
+            url: '/api/naming-settings',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    // 更新开关状态
+                    $('#auto-naming-switch').prop('checked', response.config.enabled);
+                }
+            },
+            error: function(xhr) {
+                console.error('加载自动命名设置失败:', xhr.responseText);
+            }
+        });
+    }
+    
+    // 切换自动命名功能
+    function toggleAutoNaming() {
+        const enabled = $(this).is(':checked');
+        
+        $.ajax({
+            url: '/api/toggle-naming',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                enabled: enabled
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    showSuccess(response.message);
+                } else {
+                    // 恢复原来的状态
+                    $('#auto-naming-switch').prop('checked', !enabled);
+                    showError(response.message);
+                }
+            },
+            error: function(xhr) {
+                // 恢复原来的状态
+                $('#auto-naming-switch').prop('checked', !enabled);
+                showError('切换自动命名功能失败: ' + xhr.responseText);
+            }
+        });
+    }
+
+    // Function to load all training data (添加日志)
+    function loadTrainingData() {
+        console.log("加载训练数据..."); 
+        
+        // 检查DOM元素是否存在
+        if ($('#sql-qa-container').length === 0) {
+            console.error("SQL QA container不存在，检查DOM结构");
+            return;
+        }
+        if ($('#knowledge-container').length === 0) {
+            console.error("Knowledge container不存在，检查DOM结构");
+            return;
+        }
+        
+        // 显示加载指示器
+        $('#sql-qa-container').html('<div class="text-center mt-3"><div class="spinner-border text-primary" role="status"><span class="sr-only">加载中...</span></div><p class="mt-2">正在加载SQL问答对数据...</p></div>');
+        $('#knowledge-container').html('<div class="text-center mt-3"><div class="spinner-border text-success" role="status"><span class="sr-only">加载中...</span></div><p class="mt-2">正在加载知识数据...</p></div>');
+        $('#ddl-container').html('<div class="text-center mt-3"><div class="spinner-border text-warning" role="status"><span class="sr-only">加载中...</span></div><p class="mt-2">正在加载数据描述...</p></div>'); // Add loading for DDL
+        
+        $.ajax({
+            url: '/api/training-data',
+            type: 'GET',
+            success: function(response) {
+                if (response.status === 'success') {
+                    console.log(`成功加载训练数据: ${response.data ? response.data.length : 0} 项`);
+                    allTrainingData = response.data || [];
+                    renderTrainingData(); 
+                } else {
+                    console.error('加载训练数据失败:', response.message);
+                    $('#sql-qa-container').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>加载训练数据失败: ' + response.message + '</div>');
+                    $('#knowledge-container').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>加载训练数据失败: ' + response.message + '</div>');
+                    $('#ddl-container').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>加载数据描述失败: ' + response.message + '</div>'); // Error for DDL
+                }
+            },
+            error: function(xhr) {
+                console.error('请求训练数据时出错:', xhr.status, xhr.responseText);
+                $('#sql-qa-container').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>加载SQL问答对出错</div>');
+                $('#knowledge-container').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>加载知识数据出错</div>');
+                $('#ddl-container').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>加载数据描述出错</div>'); // Error for DDL
+            }
+        });
+    }
+
+    // Function to render the loaded training data into the correct tabs (添加日志)
+    function renderTrainingData() {
+        console.log("渲染训练数据...");
+        
+        // 过滤数据
+        const sqlQaData = allTrainingData.filter(item => item.training_data_type === 'sql');
+        const knowledgeData = allTrainingData.filter(item => item.training_data_type === 'documentation');
+        const ddlData = allTrainingData.filter(item => item.training_data_type === 'ddl');
+
+        console.log(`数据分类完成 - SQL问答: ${sqlQaData.length}, 知识: ${knowledgeData.length}, DDL: ${ddlData.length}`);
+
+        // 渲染各个子标签页内容
+        renderSqlQaTable(sqlQaData);
+        renderKnowledgeBlocks(knowledgeData); // Render only documentation here
+        renderDdlBlocks(ddlData);           // New function call for DDL
+    }
+
+    // Function to render the SQL QA data into a table (添加日志)
+    function renderSqlQaTable(sqlQaData) {
+        console.log("Function renderSqlQaTable called with", sqlQaData.length, "items."); // 添加日志
+        const container = $('#sql-qa-container');
+        if (container.length === 0) {
+             console.error("SQL QA container #sql-qa-container not found!"); // 添加日志
+             return;
+        }
+        
+        if (sqlQaData.length === 0) {
+            container.html(`<div class="alert alert-light text-center"><i class="fas fa-info-circle me-2"></i><span data-i18n="database_qa.no_sql_qa_data">当前没有SQL问答对参考数据。</span></div>`); // Improved empty message
+            console.log("Rendered empty message for SQL QA."); // 添加日志
+            return;
+        }
+
+        let tableHtml = `
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div><i class="fas fa-database me-2"></i><span data-i18n="database_qa.sql_qa_training">SQL问答训练数据</span></div>
+                    <div><span class="badge bg-light text-dark">${sqlQaData.length} <span data-i18n="database_qa.records_count">条记录</span></span></div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover table-bordered table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 40%" data-i18n="database_qa.question_column">问题</th>
+                                <th style="width: 45%" data-i18n="database_qa.sql_column">SQL</th>
+                                <th style="width: 5%" data-i18n="database_qa.id_column">ID</th>
+                                <th style="width: 10%; min-width: 80px;" data-i18n="database_qa.operations_column">操作</th> <!-- Add min-width -->
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+
+        sqlQaData.forEach(item => {
+            tableHtml += `
+                <tr>
+                    <td>${item.question ? $('<div>').text(item.question).html() : '<span class="text-muted">N/A</span>'}</td>
+                    <td><pre class="m-0 p-2 bg-light rounded"><code>${item.content ? $('<div>').text(item.content).html() : '<span class="text-muted">N/A</span>'}</code></pre></td>
+                    <td>${item.id || '<span class="text-muted">N/A</span>'}</td>
+                    <td class="text-center align-middle"> <!-- Ensure vertical alignment -->
+                        <button class="btn btn-sm btn-danger delete-training-item-btn" data-id="${item.id}" data-i18n-title="database_qa.delete_button" title="删除">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tableHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        `;
+        container.html(tableHtml);
+        // 更新新生成内容的国际化
+        updateAllI18nContent();
+        console.log("Rendered SQL QA table."); // 添加日志
+    }
+
+    // Function to render documentation as knowledge blocks (MODIFIED to only handle documentation)
+    function renderKnowledgeBlocks(knowledgeData) {
+        console.log("Function renderKnowledgeBlocks called with", knowledgeData.length, "documentation items."); // 添加日志
+        const container = $('#knowledge-container');
+        if (container.length === 0) {
+            console.error("Knowledge container #knowledge-container not found!"); // 添加日志
+            return;
+        }
+
+        if (knowledgeData.length === 0) {
+            container.html(`<div class="alert alert-light text-center"><i class="fas fa-info-circle me-2"></i><span data-i18n="database_qa.no_knowledge_data">当前没有知识注入参考数据。</span></div>`); // Improved empty message
+            console.log("Rendered empty message for Knowledge."); // 添加日志
+            return;
+        }
+
+        let blocksHtml = '<div class="row">';
+        knowledgeData.forEach(item => {
+            // Should only be 'documentation' type here
+            let title = i18nHelper.t('database_qa.knowledge_item', {id: item.id || 'N/A'});
+            let contentPreview = item.content ? $('<div>').text(item.content).html() : i18nHelper.t('database_qa.no_content');
+            let typeClass = 'bg-success'; // Use success color for knowledge
+            let typeIcon = 'fa-book';
+
+            blocksHtml += `
+                <div class="col-md-12 mb-3">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header d-flex justify-content-between align-items-center ${typeClass} text-white">
+                            <div><i class="fas ${typeIcon} me-2"></i>${title}</div>
+                            <button class="btn btn-sm btn-danger delete-training-item-btn" data-id="${item.id}" data-i18n-title="database_qa.delete_button" title="删除">
+                                <i class="fas fa-trash-alt"></i> <span data-i18n="database_qa.delete_button">删除</span>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                             <div class="knowledge-content" style="max-height: 200px; overflow-y: auto;">${contentPreview}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        blocksHtml += '</div>';
+
+        container.html(blocksHtml);
+        // 更新新生成内容的国际化
+        updateAllI18nContent();
+        console.log("Rendered Knowledge blocks for documentation."); // 添加日志
+    }
+
+    // NEW Function to render DDL blocks
+    function renderDdlBlocks(ddlData) {
+        console.log("Function renderDdlBlocks called with", ddlData.length, "DDL items."); // 添加日志
+        const container = $('#ddl-container');
+         if (container.length === 0) {
+             console.error("DDL container #ddl-container not found!"); // 添加日志
+             return;
+         }
+
+        if (ddlData.length === 0) {
+            container.html(`<div class="alert alert-light text-center"><i class="fas fa-info-circle me-2"></i><span data-i18n="database_qa.no_ddl_data">当前没有数据描述 (DDL) 参考数据。</span><br><small data-i18n="database_qa.ddl_sync_hint">请在"数据管理"页面同步表结构。</small></div>`); // Improved empty message with hint
+            console.log("Rendered empty message for DDL."); // 添加日志
+            return;
+        }
+
+        let blocksHtml = '<div class="row">';
+        ddlData.forEach(item => {
+            // Should only be 'ddl' type here
+            let title = i18nHelper.t('database_qa.data_table_description', {id: item.id || 'N/A'});
+            let contentPreview = item.content ? $('<div>').text(item.content).html() : i18nHelper.t('database_qa.no_content');
+            let typeClass = 'bg-warning'; // Use warning color for DDL
+            let typeIcon = 'fa-table';
+
+            // Attempt to extract table name from DDL for a better title
+             const ddlMatch = item.content ? item.content.match(/CREATE TABLE\s+`?([\w.]+)`?/i) : null;
+             if (ddlMatch && ddlMatch[1]) {
+                title = i18nHelper.t('js.table_with_name', {name: ddlMatch[1], id: item.id || 'N/A'});
+             }
+
+            blocksHtml += `
+                <div class="col-md-12 mb-3">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header d-flex justify-content-between align-items-center ${typeClass} text-white">
+                            <div><i class="fas ${typeIcon} me-2"></i>${title}</div>
+                            <button class="btn btn-sm btn-danger delete-training-item-btn" data-id="${item.id}" data-i18n-title="database_qa.delete_button" title="删除">
+                                <i class="fas fa-trash-alt"></i> <span data-i18n="database_qa.delete_button">删除</span>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                             <pre class="m-0 p-2 bg-light rounded" style="max-height: 300px; overflow-y: auto;"><code>${contentPreview}</code></pre>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        blocksHtml += '</div>';
+
+        container.html(blocksHtml);
+        // 更新新生成内容的国际化
+        updateAllI18nContent();
+        console.log("Rendered DDL blocks."); // 添加日志
+    }
+
+    // Function to delete a specific training data item
+    function deleteTrainingItem(itemId) {
+        if (!itemId) return;
+
+        if (confirm(`确定要删除这个参考数据项 (ID: ${itemId})吗？此操作不可撤销。`)) {
+            $.ajax({
+                url: `/api/training-data/${itemId}`,
+                type: 'DELETE',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        showSuccess('参考数据项已删除');
+                        loadTrainingData(); // Reload data to reflect the change
+                    } else {
+                        showError('删除参考数据项失败: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    showError('删除参考数据项失败: ' + xhr.responseText);
+                }
+            });
+        }
+    }
+
+    // 初始化所有Bootstrap标签页组件
+    function initAllTabs() {
+        console.log("初始化所有标签页组件");
+        
+        // 初始化卡片选择器点击事件
+        $('.data-card').off('click').on('click', function() {
+            const targetId = $(this).data('target');
+            
+            // 移除所有卡片的活动状态
+            $('.data-card').removeClass('active');
+            // 添加当前卡片的活动状态
+            $(this).addClass('active');
+            
+            // 隐藏所有内容区域
+            $('#reference-data-pills-content .tab-pane').removeClass('show active');
+            // 显示对应的内容区域
+            $(targetId).addClass('show active');
+            
+            // 如果有表格，调整一下布局以适应新的显示状态
+            setTimeout(() => {
+                $(window).trigger('resize');
+            }, 100);
+        });
+        
+        // 初始化问答界面中的消息标签页
+        initMessageTabs();
+    }
+
+    // 初始化问答界面中的消息标签页
+    function initMessageTabs() {
+        console.log("初始化问答界面消息标签页");
+        var messageTabs = document.querySelectorAll('.result-tabs .nav-tabs button[data-bs-toggle="tab"]');
+        if (messageTabs.length > 0) {
+            [].slice.call(messageTabs).forEach(function (tabEl) {
+                new bootstrap.Tab(tabEl);
+                
+                // 添加标签页激活事件，确保图表在标签页显示时正确渲染
+                tabEl.addEventListener('shown.bs.tab', function (event) {
+                    const targetId = event.target.getAttribute('data-bs-target');
+                    const chartContainer = document.querySelector(`${targetId} .chart-result-container`);
+                    if (chartContainer) {
+                        const messageId = chartContainer.getAttribute('data-message-id');
+                        if (messageId) {
+                            const message = currentMessages.find(m => m.id.toString() === messageId.toString());
+                            if (message && message.visualization) {
+                                try {
+                                    let visualizationData = message.visualization;
+                                    if (typeof visualizationData === 'string') {
+                                        visualizationData = JSON.parse(visualizationData);
+                                    }
+                                    // 重新渲染图表
+                                    renderMessageChart(messageId, visualizationData);
+                                } catch(err) {
+                                    console.error("标签页激活时重新渲染图表失败:", err);
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+        }
+    }
+
+    // 刷新训练数据按钮点击
+    $('#refresh-training-data-btn').click(function() {
+        loadTrainingData();
+    });
+
+    // 添加SQL问答对按钮点击
+    $('#add-sql-qa-btn').click(function() {
+        // 打开SQL问答对添加对话框
+        $('#sqlQaModal').modal('show');
+    });
+
+    // 添加知识注入按钮点击
+    $('#add-knowledge-btn').click(function() {
+        // 打开知识文档添加对话框
+        $('#documentationModal').modal('show');
+    });
+    
+    // 提交SQL问答对表单
+    $('#submit-sql-qa').click(function() {
+        const question = $('#sql-question').val().trim();
+        const sql = $('#sql-content').val().trim();
+        
+        if (!question || !sql) {
+            i18nHelper.showTranslatedError('database_qa.question_sql_required');
+            return;
+        }
+        
+        // 禁用提交按钮防止重复提交
+        $(this).prop('disabled', true);
+        
+        // 发送请求
+        $.ajax({
+            url: '/api/add-sql-qa',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                question: question,
+                sql: sql
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // 关闭对话框
+                    $('#sqlQaModal').modal('hide');
+                    
+                    // 清空表单
+                    $('#sql-qa-form')[0].reset();
+                    
+                    // 显示成功消息
+                    i18nHelper.showTranslatedSuccess('database_qa.sql_qa_add_success');
+                    
+                    // 重新加载训练数据
+                    loadTrainingData();
+                } else {
+                    i18nHelper.showTranslatedError('database_qa.add_failed', {error: response.message});
+                }
+            },
+            error: function(xhr) {
+                i18nHelper.showTranslatedError('database_qa.add_failed', {error: xhr.responseText});
+            },
+            complete: function() {
+                // 重新启用提交按钮
+                $('#submit-sql-qa').prop('disabled', false);
+            }
+        });
+    });
+    
+    // 提交知识文档表单
+    $('#submit-documentation').click(function() {
+        const documentation = $('#documentation-content').val().trim();
+        
+        if (!documentation) {
+            i18nHelper.showTranslatedError('database_qa.document_content_required');
+            return;
+        }
+        
+        // 禁用提交按钮防止重复提交
+        $(this).prop('disabled', true);
+        
+        // 发送请求
+        $.ajax({
+            url: '/api/add-documentation',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                documentation: documentation
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    // 关闭对话框
+                    $('#documentationModal').modal('hide');
+                    
+                    // 清空表单
+                    $('#documentation-form')[0].reset();
+                    
+                    // 显示成功消息
+                    i18nHelper.showTranslatedSuccess('database_qa.knowledge_add_success');
+                    
+                    // 重新加载训练数据
+                    loadTrainingData();
+                } else {
+                    i18nHelper.showTranslatedError('database_qa.add_failed', {error: response.message});
+                }
+            },
+            error: function(xhr) {
+                i18nHelper.showTranslatedError('database_qa.add_failed', {error: xhr.responseText});
+            },
+            complete: function() {
+                // 重新启用提交按钮
+                $('#submit-documentation').prop('disabled', false);
+            }
+        });
+    });
+
+    // 添加消息作为训练数据 (新函数)
+    function addMessageAsTrainingData(aiMessageId) {
+        if (!currentMessages || currentMessages.length === 0) {
+            showError('无法找到消息数据');
+            return;
+        }
+
+        // Find the AI message
+        const aiMessageIndex = currentMessages.findIndex(m => m.id.toString() === aiMessageId.toString());
+        if (aiMessageIndex === -1) {
+            showError('无法找到AI消息');
+            return;
+        }
+        const aiMessage = currentMessages[aiMessageIndex];
+
+        // Check if the AI message has SQL
+        if (!aiMessage.sql || aiMessage.sql.trim() === '') {
+            showError('此消息不包含SQL语句，无法添加为问答对。');
+            return;
+        }
+        const sql = aiMessage.sql.trim();
+
+        // Find the preceding user message
+        let userQuestion = null;
+        for (let i = aiMessageIndex - 1; i >= 0; i--) {
+            if (currentMessages[i].role === 'user') {
+                userQuestion = currentMessages[i].content.trim();
+                break;
+            }
+        }
+
+        if (!userQuestion) {
+            i18nHelper.showTranslatedError('database_qa.no_user_question');
+            return;
+        }
+
+        console.log(`准备添加训练数据: 问题='${userQuestion}', SQL='${sql}'`);
+
+        // -- 使用 Bootstrap Modal 替代 confirm --
+        // 1. 获取模态框元素和相关内容元素
+        const confirmModalElement = document.getElementById('confirmAddQaModal');
+        const confirmModal = new bootstrap.Modal(confirmModalElement);
+        const questionElement = document.getElementById('confirm-qa-question');
+        const sqlElement = document.getElementById('confirm-qa-sql');
+        const confirmButton = document.getElementById('confirm-add-qa-btn');
+        const originalSaveButton = $(`.save-message-btn[data-id="${aiMessageId}"]`); // 保存原始按钮引用
+
+        // 2. 填充模态框内容
+        questionElement.textContent = userQuestion;
+        sqlElement.textContent = sql;
+
+        // 3. 处理确认按钮点击事件 (确保只绑定一次或每次都移除旧监听器)
+        const confirmHandler = function() {
+            // 禁用模态框确认按钮和原始保存按钮
+            confirmButton.disabled = true;
+            originalSaveButton.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 保存中');
+            confirmButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 添加中...';
+
+            // 发送请求
+            $.ajax({
+                url: '/api/add-sql-qa',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    question: userQuestion,
+                    sql: sql
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        i18nHelper.showTranslatedSuccess('database_qa.add_reference_success');
+                        // Optionally, refresh the training data view if the reference tab is active
+                        if ($('#reference-data-tab').is(':visible')) {
+                             loadTrainingData();
+                        }
+                    } else {
+                        showError('添加参考数据失败: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    showError('添加参考数据失败: ' + xhr.responseText);
+                },
+                complete: function() {
+                    // 隐藏模态框
+                    confirmModal.hide();
+                    // 恢复原始保存按钮状态
+                    originalSaveButton.prop('disabled', false).html('保存');
+                    // 恢复模态框确认按钮状态
+                    confirmButton.disabled = false;
+                    confirmButton.innerHTML = '确定添加';
+                    // 移除事件监听器，避免重复添加
+                    confirmButton.removeEventListener('click', confirmHandler);
+                }
+            });
+        };
+
+        // 先移除可能存在的旧监听器，再添加新的
+        confirmButton.removeEventListener('click', confirmHandler); 
+        confirmButton.addEventListener('click', confirmHandler);
+
+        // 4. 显示模态框
+        confirmModal.show();
+
+        // 当模态框隐藏时，确保移除事件监听器 (以防用户通过其他方式关闭)
+        confirmModalElement.addEventListener('hidden.bs.modal', function onModalHide() {
+             confirmButton.removeEventListener('click', confirmHandler);
+             confirmModalElement.removeEventListener('hidden.bs.modal', onModalHide); // 清理自身
+        }, { once: true }); // 使用 once 选项确保只触发一次
+
+        /* -- 原生 confirm() 代码已移除 --
+        if (!confirm(`确定要将以下问答对添加到参考数据吗？\n\n问题: ${userQuestion}\nSQL: ${sql}`)) {
+            return;
+        }
+        // ... (AJAX 调用移到 confirmHandler 内部)
+        */
+    }
+
+</script>
+{% endblock %}

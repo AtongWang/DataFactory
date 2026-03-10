@@ -1,0 +1,733 @@
+{% extends "layout.html" %}
+
+{% block title %}WisdominDATA - 知识图谱指标{% endblock %}
+
+{% block additional_styles %}
+<style>
+    .metric-card {
+        margin-bottom: 20px;
+        padding: 15px;
+        border: 1px solid #eee;
+        border-radius: 5px;
+        background-color: #fff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .chart-container {
+        position: relative;
+        height: 300px; /* Adjust as needed */
+        width: 100%;
+        margin-bottom: 20px;
+    }
+    #loading-indicator {
+        text-align: center;
+        padding: 50px;
+        font-size: 1.2em;
+    }
+    .error-message {
+        color: #dc3545; /* Bootstrap danger color */
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid #dc3545;
+        border-radius: 5px;
+        background-color: #f8d7da; /* Light red */
+    }
+    #llm-analysis-content {
+      white-space: pre-wrap; /* Allow wrapping */
+      word-wrap: break-word;
+      background-color: #f8f9fa;
+      padding: 15px;
+      border-radius: 5px;
+      border: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2 data-i18n="kg_metrics.title">知识图谱指标分析</h2>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label for="graph-selector" class="form-label" data-i18n="kg_metrics.select_graph">选择知识图谱:</label>
+            <select id="graph-selector" class="form-select">
+                <option value="" data-i18n="common.please_select">请选择...</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="metrics-results" style="display: none;">
+        <div id="error-display" class="mb-3"></div>
+
+        <h4><span data-i18n="kg_metrics.graph_overview">图谱概览</span>: <span id="graph-name"></span> (ID: <span id="graph-id"></span>)</h4>
+
+        <div class="row">
+            <!-- Basic Stats -->
+            <div class="col-md-4">
+                <div class="metric-card">
+                    <h5 data-i18n="kg_metrics.basic_statistics">基础统计</h5>
+                    <p><strong data-i18n="kg_metrics.total_nodes">节点总数:</strong> <span id="node-count">-</span></p>
+                    <p><strong data-i18n="kg_metrics.total_edges">关系总数:</strong> <span id="rel-count">-</span></p>
+                    <p><strong data-i18n="kg_metrics.graph_density">图密度:</strong> <span id="graph-density">-</span></p>
+                    <p><strong data-i18n="kg_metrics.orphan_nodes">孤立节点数:</strong> <span id="orphan-count">-</span></p>
+                </div>
+            </div>
+            <!-- Connectivity -->
+             <div class="col-md-4">
+                <div class="metric-card">
+                    <h5 data-i18n="kg_metrics.connectivity">连通性</h5>
+                    <p><strong data-i18n="kg_metrics.avg_degree">平均度数:</strong> <span id="avg-degree">-</span></p>
+                    <p><strong data-i18n="kg_metrics.min_degree">最小度数:</strong> <span id="min-degree">-</span></p>
+                    <p><strong data-i18n="kg_metrics.max_degree">最大度数:</strong> <span id="max-degree">-</span></p>
+                    <!-- 度分布图表 -->
+                    <div class="chart-container">
+                         <canvas id="degree-dist-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+             <!-- Community Detection -->
+             <div class="col-md-4">
+                <div class="metric-card">
+                    <h5><span data-i18n="kg_metrics.community_structure">社区结构</span> <small id="community-algo" class="text-muted"></small></h5>
+                    <div id="community-stats">
+                        <p><strong data-i18n="kg_metrics.community_count">社区数量:</strong> <span id="community-count">-</span></p>
+                        <p><strong data-i18n="kg_metrics.min_community_size">最小社区规模:</strong> <span id="min-community-size">-</span></p>
+                        <p><strong data-i18n="kg_metrics.max_community_size">最大社区规模:</strong> <span id="max-community-size">-</span></p>
+                        <p><strong data-i18n="kg_metrics.avg_community_size">平均社区规模:</strong> <span id="avg-community-size">-</span></p>
+                        <p><strong data-i18n="kg_metrics.median_community_size">中位数社区规模:</strong> <span id="median-community-size">-</span></p>
+                    </div>
+                    <div id="community-error" class="error-message" style="display: none;"></div>
+                     <!-- 社区规模分布图表 -->
+                    <div class="chart-container" id="community-size-chart-container" style="display:none;">
+                         <canvas id="community-size-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Degree Centrality -->
+            <div class="col-md-4">
+                <div class="metric-card">
+                    <h5 data-i18n="kg_metrics.degree_centrality">度中心性</h5>
+                    <div class="mb-2">
+                         <label for="degree-type-filter" class="form-label form-label-sm" data-i18n="kg_metrics.by_node_type_filter">按节点类型筛选 Top 10:</label>
+                         <select id="degree-type-filter" class="form-select form-select-sm">
+                             <option value="__all__" data-i18n="kg_metrics.all_types">全部类型</option>
+                             {/* Options will be populated by JS */}
+                         </select>
+                     </div>
+                    <div id="degree-centrality-results">
+                        <p><strong data-i18n="kg_metrics.overall_range">整体范围:</strong> <span id="degree-centrality-range">-</span></p>
+                        <h6><span data-i18n="kg_metrics.top_10_nodes">Top 10 节点</span> (<span class="filtered-type-name" data-i18n="kg_metrics.all_types">全部类型</span>):</h6>
+                        <ol id="top-degree-nodes" class="list-group list-group-numbered list-group-flush"></ol>
+                    </div>
+                    <div id="degree-centrality-error" class="error-message" style="display: none;"></div>
+                </div>
+            </div>
+            <!-- Betweenness Centrality -->
+            <div class="col-md-4">
+                <div class="metric-card">
+                    <h5 data-i18n="kg_metrics.betweenness_centrality">中间中心性</h5>
+                     <div class="mb-2">
+                         <label for="betweenness-type-filter" class="form-label form-label-sm" data-i18n="kg_metrics.by_node_type_filter">按节点类型筛选 Top 10:</label>
+                         <select id="betweenness-type-filter" class="form-select form-select-sm">
+                             <option value="__all__" data-i18n="kg_metrics.all_types">全部类型</option>
+                             {/* Options will be populated by JS */}
+                         </select>
+                     </div>
+                    <div id="betweenness-centrality-results">
+                        <p><strong data-i18n="kg_metrics.overall_range">整体范围:</strong> <span id="betweenness-centrality-range">-</span></p>
+                        <h6><span data-i18n="kg_metrics.top_10_nodes">Top 10 节点</span> (<span class="filtered-type-name" data-i18n="kg_metrics.all_types">全部类型</span>):</h6>
+                        <ol id="top-betweenness-nodes" class="list-group list-group-numbered list-group-flush"></ol>
+                    </div>
+                    <div id="betweenness-centrality-error" class="error-message" style="display: none;"></div>
+                </div>
+            </div>
+            <!-- Closeness Centrality -->
+            <div class="col-md-4">
+                <div class="metric-card">
+                    <h5 data-i18n="kg_metrics.closeness_centrality">接近中心性</h5>
+                      <div class="mb-2">
+                         <label for="closeness-type-filter" class="form-label form-label-sm" data-i18n="kg_metrics.by_node_type_filter">按节点类型筛选 Top 10:</label>
+                         <select id="closeness-type-filter" class="form-select form-select-sm">
+                             <option value="__all__" data-i18n="kg_metrics.all_types">全部类型</option>
+                             {/* Options will be populated by JS */}
+                         </select>
+                     </div>
+                     <div id="closeness-centrality-results">
+                        <p><strong data-i18n="kg_metrics.overall_range">整体范围:</strong> <span id="closeness-centrality-range">-</span></p>
+                        <h6><span data-i18n="kg_metrics.top_10_nodes">Top 10 节点</span> (<span class="filtered-type-name" data-i18n="kg_metrics.all_types">全部类型</span>):</h6>
+                        <ol id="top-closeness-nodes" class="list-group list-group-numbered list-group-flush"></ol>
+                     </div>
+                     <div id="closeness-centrality-error" class="error-message" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Node Type Distribution -->
+            <div class="col-md-6">
+                <div class="metric-card">
+                    <h5 data-i18n="kg_metrics.node_type_distribution">节点类型分布</h5>
+                    <div class="chart-container">
+                        <canvas id="node-type-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <!-- Relationship Type Distribution -->
+            <div class="col-md-6">
+                 <div class="metric-card">
+                    <h5 data-i18n="kg_metrics.relationship_type_distribution">关系类型分布</h5>
+                    <div class="chart-container">
+                        <canvas id="rel-type-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+         <!-- LLM Analysis -->
+        <div class="row">
+            <div class="col-12">
+                <div class="metric-card">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5><i class="fas fa-robot"></i> <span data-i18n="kg_metrics.llm_analysis_report">大模型分析报告</span></h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="llm-analysis-toggle" disabled>
+                            <label class="form-check-label" for="llm-analysis-toggle" data-i18n="kg_metrics.run_analysis">运行分析</label>
+                        </div>
+                    </div>
+                    <div id="llm-analysis-content" style="display: none;">
+                        {/* Analysis will be loaded here */}
+                    </div>
+                    <div id="llm-analysis-placeholder">
+                         <p class="text-muted" data-i18n="kg_metrics.click_toggle_to_generate">点击右上方开关以生成分析报告。</p>
+                    </div>
+                    <div id="llm-analysis-loading" style="display: none;">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <span class="ms-2" data-i18n="kg_metrics.generating_analysis_report">正在生成分析报告...</span>
+                    </div>
+                     <div id="llm-analysis-error" class="error-message" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="loading-indicator" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p data-i18n="kg_metrics.calculating_metrics">正在计算指标并生成分析，请稍候...</p>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block additional_scripts %}
+<!-- Chart.js -->
+<script src="{{ url_for('static', filename='js/vendor/chart.min.js') }}"></script>
+<!-- Marked.js for Markdown rendering -->
+<script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}"></script>
+<script>
+$(document).ready(function() {
+    const graphSelector = $('#graph-selector');
+    const metricsResults = $('#metrics-results');
+    const loadingIndicator = $('#loading-indicator');
+    const errorDisplay = $('#error-display');
+    let charts = {}; // To store chart instances
+    let currentGraphId = null;
+    let currentMetricsData = null; // Store metrics data without LLM analysis
+    let llmAnalysisCache = {}; // Cache LLM analysis results per graph ID
+    let fullTopNodes = { // Store full Top-N lists for filtering - NOW stores structured data
+        degree: { global: [], by_type: {} },
+        betweenness: { global: [], by_type: {} },
+        closeness: { global: [], by_type: {} }
+    };
+
+    // Function to destroy existing charts
+    function destroyCharts() {
+        Object.values(charts).forEach(chart => {
+            if (chart) {
+                chart.destroy();
+            }
+        });
+        charts = {};
+    }
+
+    // Function to display error messages
+    function displayError(message, container = errorDisplay) {
+         const errorHtml = `<div class="alert alert-danger alert-dismissible fade show" role="alert">
+                              ${message}
+                              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>`;
+         container.html(errorHtml).show();
+    }
+
+    // Function to reset LLM analysis section
+    function resetLlmAnalysisSection() {
+        $('#llm-analysis-toggle').prop('checked', false).prop('disabled', true);
+        $('#llm-analysis-content').hide().empty();
+        $('#llm-analysis-placeholder').show();
+        $('#llm-analysis-loading').hide();
+        $('#llm-analysis-error').hide().empty();
+    }
+
+    // Function to reset centrality sections
+    function resetCentralitySections() {
+        ['degree', 'betweenness', 'closeness'].forEach(type => {
+            $(`#${type}-centrality-results`).show();
+            $(`#${type}-centrality-range`).text('-');
+            $(`#top-${type}-nodes`).empty();
+            $(`#${type}-centrality-error`).hide().empty();
+            // Reset filter dropdown
+            const filterDropdown = $(`#${type}-type-filter`);
+            filterDropdown.empty().append('<option value="__all__">全部类型</option>').val('__all__');
+            filterDropdown.parent().find('.filtered-type-name').text('全部类型'); // Reset h6 title span
+        });
+    }
+
+    // Function to display centrality data (only range and error)
+    function displayCentralityData(type, data) {
+        const resultsDiv = $(`#${type}-centrality-results`);
+        const rangeSpan = $(`#${type}-centrality-range`);
+        const errorDiv = $(`#${type}-centrality-error`);
+
+        resultsDiv.show();
+        errorDiv.hide().empty();
+
+        if (!data || data.available === false) {
+            resultsDiv.hide();
+            errorDiv.text("中心性计算不可用 (Neo4j GDS 插件未找到或配置不正确)").show();
+            return;
+        }
+
+        if (data.error) {
+            resultsDiv.hide();
+            errorDiv.text(`中心性计算失败: ${data.error}`).show();
+            return;
+        }
+
+        if (data.calculated) {
+            const minScore = data.min_score !== null ? data.min_score.toFixed(4) : 'N/A';
+            const maxScore = data.max_score !== null ? data.max_score.toFixed(4) : 'N/A';
+            rangeSpan.text(`${minScore} - ${maxScore}`);
+        } else {
+            // Fallback case: GDS available but calculation didn't run or failed silently
+            resultsDiv.hide();
+            errorDiv.text("中心性未计算或未返回结果。").show();
+        }
+    }
+
+    // Function to populate filter dropdowns
+    function populateTypeFilters(nodeTypes) {
+        const types = Object.keys(nodeTypes || {});
+        ['degree', 'betweenness', 'closeness'].forEach(centralityType => {
+            const selector = $(`#${centralityType}-type-filter`);
+            // Keep the default "__all__" option, just add specific types
+            // selector.empty().append('<option value="__all__">全部类型</option>'); // Reset in resetCentralitySections
+            types.forEach(type => {
+                selector.append(`<option value="${type}">${type}</option>`);
+            });
+        });
+    }
+
+    // Function to update the Top 10 list based on selected type
+    function updateTopNodesList(centralityType, selectedNodeType) {
+        const fullList = fullTopNodes[centralityType] || {};
+        const listElement = $(`#top-${centralityType}-nodes`);
+        const filteredTypeNameSpan = listElement.closest('.metric-card').find('.filtered-type-name'); // Find the span in the h6
+        listElement.empty(); // Clear current list
+
+        let nodesToList = [];
+        let typeName = '全部类型';
+
+        if (selectedNodeType === '__all__') {
+            nodesToList = fullList.global || [];
+        } else {
+            nodesToList = fullList.by_type?.[selectedNodeType] || [];
+            typeName = selectedNodeType;
+        }
+
+        filteredTypeNameSpan.text(typeName); // Update the h6 title
+
+        // Render the list (max 10)
+        const top10 = nodesToList.slice(0, 10);
+
+        if (top10.length > 0) {
+            top10.forEach(node => {
+                const score = node.score !== null ? node.score.toFixed(4) : 'N/A';
+                const nodeName = node.node_name || node.unique_id || '未知节点';
+                const nodeType = node.node_type || '未知类型';
+                // Add tooltip with unique ID for clarity if name is ambiguous
+                const tooltipText = `ID: ${node.unique_id || 'N/A'}\n类型: ${nodeType}`;
+                listElement.append(
+                     `<li class="list-group-item d-flex justify-content-between align-items-start" title="${tooltipText}">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">${nodeName}</div>
+                            <small class="text-muted">类型: ${nodeType}</small>
+                        </div>
+                        <span class="badge bg-primary rounded-pill">${score}</span>
+                      </li>`
+                 );
+            });
+        } else {
+            listElement.append(`<li class="list-group-item text-muted">无符合条件的节点数据 (类型: ${typeName})</li>`);
+        }
+    }
+
+    // Function to create or update a chart
+    function renderChart(canvasId, type, data, options) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        if (charts[canvasId]) {
+            charts[canvasId].destroy();
+        }
+        charts[canvasId] = new Chart(ctx, { type, data, options });
+    }
+
+     // Function to process degree distribution for chart
+    function prepareDegreeDistributionData(degreeDist) {
+        const degrees = Object.keys(degreeDist).map(Number).sort((a, b) => a - b);
+        const counts = degrees.map(d => degreeDist[d]);
+        // Group degrees into bins if too many unique degrees? For now, show all.
+        // Limit shown degrees if too many? Maybe top 50?
+        const MAX_POINTS = 50; // Limit points for readability
+        if (degrees.length > MAX_POINTS) {
+            // Simple approach: take first MAX_POINTS (lowest degrees)
+            // More sophisticated: binning or sampling might be needed
+             return {
+                labels: degrees.slice(0, MAX_POINTS).map(String),
+                datasets: [{
+                    label: `节点数量 (仅显示前 ${MAX_POINTS} 个度数)`,
+                    data: counts.slice(0, MAX_POINTS),
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1,
+                    fill: false
+                }]
+            };
+        } else {
+             return {
+                labels: degrees.map(String),
+                datasets: [{
+                    label: '节点数量',
+                    data: counts,
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1,
+                    fill: false
+                }]
+            };
+        }
+    }
+
+     // Function to process community size distribution for chart (histogram)
+    function prepareCommunitySizeData(communitySizes) {
+        if (!communitySizes || communitySizes.length === 0) {
+            return null;
+        }
+        // Simple Histogram: Create bins (e.g., 1-10, 11-100, 101-1000, 1000+)
+        const bins = { "1-10": 0, "11-50": 0, "51-200": 0, "201-1000": 0, "1001+": 0 };
+        const binKeys = Object.keys(bins);
+        const binRanges = [10, 50, 200, 1000]; // Upper bounds (exclusive for first, inclusive after)
+
+        communitySizes.forEach(size => {
+            if (size <= binRanges[0]) bins[binKeys[0]]++;
+            else if (size <= binRanges[1]) bins[binKeys[1]]++;
+            else if (size <= binRanges[2]) bins[binKeys[2]]++;
+            else if (size <= binRanges[3]) bins[binKeys[3]]++;
+            else bins[binKeys[4]]++;
+        });
+
+        return {
+            labels: binKeys,
+            datasets: [{
+                label: '社区数量',
+                data: Object.values(bins),
+                backgroundColor: 'rgba(153, 102, 255, 0.6)', // Purple
+                borderColor: 'rgba(153, 102, 255, 1)',
+                borderWidth: 1
+            }]
+        };
+    }
+
+    // Fetch knowledge graphs on page load
+    $.ajax({
+        url: '/api/kg/graphs',
+        method: 'GET',
+        success: function(response) {
+            if (response.status === 'success' && response.graphs) {
+                response.graphs.forEach(graph => {
+                    graphSelector.append(`<option value="${graph.id}">${graph.name} (ID: ${graph.id})</option>`);
+                });
+            } else {
+                 displayError('加载知识图谱列表失败: ' + (response.message || '未知错误'));
+            }
+        },
+        error: function(xhr) {
+             displayError('加载知识图谱列表失败: ' + (xhr.responseJSON?.message || xhr.statusText));
+        }
+    });
+
+    // Handle graph selection change
+    graphSelector.on('change', function() {
+        selectedGraphId = $(this).val(); // Use local var or update currentGraphId
+        currentGraphId = selectedGraphId; // Store current graph ID
+        metricsResults.hide();
+        errorDisplay.empty().hide(); // Clear previous errors
+        destroyCharts(); // Destroy old charts
+        resetLlmAnalysisSection(); // Reset LLM section on graph change
+        resetCentralitySections(); // Reset centrality sections
+        currentMetricsData = null; // Clear previous metrics data
+
+        if (selectedGraphId) {
+            loadingIndicator.show();
+
+            $.ajax({
+                url: `/api/kg/graphs/${selectedGraphId}/metrics`,
+                method: 'GET',
+                timeout: 300000, // 5 minutes timeout for potentially long calculations
+                success: function(response) {
+                    loadingIndicator.hide();
+                    if (response.status === 'success' && response.metrics) {
+                        const metrics = response.metrics;
+                        currentMetricsData = metrics; // Store the full metrics data early
+
+                        // Store structured top node lists
+                        fullTopNodes.degree = { 
+                            global: metrics.degree_centrality?.top_nodes_global || [], 
+                            by_type: metrics.degree_centrality?.top_nodes_by_type || {}
+                        };
+                        fullTopNodes.betweenness = { 
+                            global: metrics.betweenness_centrality?.top_nodes_global || [],
+                            by_type: metrics.betweenness_centrality?.top_nodes_by_type || {}
+                        };
+                        fullTopNodes.closeness = { 
+                            global: metrics.closeness_centrality?.top_nodes_global || [],
+                            by_type: metrics.closeness_centrality?.top_nodes_by_type || {}
+                        };
+
+                        metricsResults.show();
+
+                        // Display errors from backend calculation if any
+                        if (metrics.errors && metrics.errors.length > 0) {
+                             displayError("计算指标时遇到问题: <br>- " + metrics.errors.join("<br>- "));
+                        }
+
+                        // Populate metrics
+                        $('#graph-name').text(graphSelector.find('option:selected').text().split(' (ID:')[0]); // Extract name
+                        $('#graph-id').text(metrics.graph_id);
+                        $('#node-count').text(metrics.node_count ?? 'N/A');
+                        $('#rel-count').text(metrics.relationship_count ?? 'N/A');
+                        $('#graph-density').text(metrics.graph_density?.toFixed(5) ?? 'N/A');
+                        $('#orphan-count').text(metrics.orphan_node_count ?? 'N/A');
+                        $('#avg-degree').text(metrics.average_degree ?? 'N/A');
+
+                        // Degree distribution summary and chart
+                        const degreeDist = metrics.degree_distribution || {};
+                        const degrees = Object.keys(degreeDist).map(Number);
+                        $('#min-degree').text(degrees.length > 0 ? Math.min(...degrees) : 'N/A');
+                        $('#max-degree').text(degrees.length > 0 ? Math.max(...degrees) : 'N/A');
+                         if (degrees.length > 0) {
+                            const degreeData = prepareDegreeDistributionData(degreeDist);
+                             renderChart('degree-dist-chart', 'line', degreeData, { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: '节点度数'}}, y: { title: { display: true, text: '节点数量'}, beginAtZero: true } } });
+                         } else {
+                             // Handle case with no degrees (e.g., single node graph)
+                             $('#degree-dist-chart').parent().html('<p class="text-muted text-center">无度数数据可显示</p>');
+                         }
+
+
+                        // Node Type Chart (Pie)
+                        const nodeTypes = metrics.node_type_distribution || {};
+                        if (Object.keys(nodeTypes).length > 0) {
+                             renderChart('node-type-chart', 'pie', {
+                                labels: Object.keys(nodeTypes),
+                                datasets: [{ data: Object.values(nodeTypes), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'] }] // Add more colors if needed
+                             }, { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } });
+                         } else {
+                              $('#node-type-chart').parent().html('<p class="text-muted text-center">无节点类型数据</p>');
+                         }
+
+                        // Relationship Type Chart (Pie or Bar)
+                        const relTypes = metrics.relationship_type_distribution || {};
+                         if (Object.keys(relTypes).length > 0) {
+                            renderChart('rel-type-chart', 'pie', {
+                                labels: Object.keys(relTypes),
+                                datasets: [{ data: Object.values(relTypes), backgroundColor: ['#36A2EB', '#FFCE56', '#FF6384', '#9966FF', '#4BC0C0', '#FF9F40'] }] // Different color start
+                            }, { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } });
+                        } else {
+                            $('#rel-type-chart').parent().html('<p class="text-muted text-center">无关系类型数据</p>');
+                        }
+
+                        // Community Detection Results
+                        const communityInfo = metrics.community_detection || {};
+                        const communityErrorDiv = $('#community-error');
+                        const communityStatsDiv = $('#community-stats');
+                        const communityChartContainer = $('#community-size-chart-container');
+                        communityErrorDiv.hide().empty();
+                        communityStatsDiv.show();
+                        communityChartContainer.hide();
+                        $('#community-algo').text(''); // Clear previous algo name
+
+                        if (communityInfo.available === false) {
+                             communityStatsDiv.hide();
+                             communityErrorDiv.text("社区发现不可用 (Neo4j GDS 插件未找到或配置不正确)").show();
+                        } else if (communityInfo.error) {
+                             communityStatsDiv.hide();
+                             communityErrorDiv.text(`社区发现失败: ${communityInfo.error}`).show();
+                        } else if (communityInfo.calculated) {
+                            $('#community-algo').text(`(使用 ${communityInfo.algorithm || '未知'} 算法)`);
+                            $('#community-count').text(communityInfo.community_count ?? 'N/A');
+                            $('#min-community-size').text(communityInfo.min_community_size ?? 'N/A');
+                            $('#max-community-size').text(communityInfo.max_community_size ?? 'N/A');
+                            $('#avg-community-size').text(communityInfo.avg_community_size ?? 'N/A');
+                            $('#median-community-size').text(communityInfo.median_community_size ?? 'N/A');
+
+                            // Community Size Distribution Chart (Histogram/Bar)
+                            const communitySizeData = prepareCommunitySizeData(communityInfo.community_size_distribution);
+                             if (communitySizeData) {
+                                communityChartContainer.show();
+                                 renderChart('community-size-chart', 'bar', communitySizeData, { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: '社区规模范围'}}, y: { title: { display: true, text: '社区数量'}, beginAtZero: true } } });
+                             } else {
+                                 communityChartContainer.hide();
+                                 communityChartContainer.parent().append('<p class="text-muted text-center">无社区规模数据</p>'); // Add message if no sizes
+                             }
+                        } else {
+                             // Case where GDS is available but calculation wasn't triggered or failed silently
+                             communityStatsDiv.hide();
+                             communityErrorDiv.text("社区发现未执行或未返回结果。").show();
+                        }
+
+                        // Populate Centrality Metrics (Range and Errors only)
+                        displayCentralityData('degree', metrics.degree_centrality);
+                        displayCentralityData('betweenness', metrics.betweenness_centrality);
+                        displayCentralityData('closeness', metrics.closeness_centrality);
+
+                        // Populate Type Filters
+                        populateTypeFilters(metrics.node_type_distribution);
+
+                        // Initial display for Top 10 lists (using overall top 10)
+                        updateTopNodesList('degree', '__all__');
+                        updateTopNodesList('betweenness', '__all__');
+                        updateTopNodesList('closeness', '__all__');
+
+                        // LLM Analysis - Enable toggle etc.
+                        // Store the fetched metrics data (without LLM analysis) - Already done above
+                        // currentMetricsData = metrics;
+                        // Check cache first
+                        if (llmAnalysisCache[currentGraphId]) {
+                             const htmlOutput = marked.parse(llmAnalysisCache[currentGraphId]);
+                             $('#llm-analysis-content').html(htmlOutput).show();
+                             $('#llm-analysis-placeholder').hide();
+                             $('#llm-analysis-toggle').prop('checked', true).prop('disabled', false); // Enable toggle, set to ON
+                        } else {
+                            resetLlmAnalysisSection(); // Ensure it's reset
+                            $('#llm-analysis-toggle').prop('disabled', false); // Enable the toggle switch now that metrics are loaded
+                        }
+
+                    } else {
+                        // Backend returned status 'error'
+                        loadingIndicator.hide();
+                        displayError('获取指标失败: ' + (response.message || '未知错误'));
+                    }
+                },
+                error: function(xhr) {
+                    loadingIndicator.hide();
+                    let errorMsg = '获取指标时发生错误: ';
+                    if (xhr.status === 0) {
+                         errorMsg += '无法连接到服务器或请求超时。请检查网络连接和后端服务状态。';
+                    } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                         errorMsg += xhr.responseJSON.message;
+                    } else {
+                         errorMsg += xhr.statusText + ` (${xhr.status})`;
+                    }
+                     displayError(errorMsg);
+                }
+            });
+        }
+    });
+
+    // Add event listeners for filter dropdowns
+    $('#degree-type-filter').on('change', function() {
+        updateTopNodesList('degree', $(this).val());
+    });
+    $('#betweenness-type-filter').on('change', function() {
+        updateTopNodesList('betweenness', $(this).val());
+    });
+    $('#closeness-type-filter').on('change', function() {
+        updateTopNodesList('closeness', $(this).val());
+    });
+
+    // Handle LLM Analysis Toggle Change
+    $('#llm-analysis-toggle').on('change', function() {
+        const isChecked = $(this).is(':checked');
+        const llmContent = $('#llm-analysis-content');
+        const llmPlaceholder = $('#llm-analysis-placeholder');
+        const llmLoading = $('#llm-analysis-loading');
+        const llmError = $('#llm-analysis-error');
+
+        llmContent.hide(); // Hide content initially on toggle change
+        llmError.hide().empty();
+
+        if (isChecked) {
+            // Check cache first
+            if (llmAnalysisCache[currentGraphId]) {
+                const htmlOutput = marked.parse(llmAnalysisCache[currentGraphId]);
+                llmContent.html(htmlOutput).show();
+                llmPlaceholder.hide();
+                return; // Already loaded
+            }
+
+            // If not cached and metrics data is available
+            if (currentGraphId && currentMetricsData) {
+                llmPlaceholder.hide();
+                llmLoading.show();
+                $(this).prop('disabled', true); // Disable toggle while loading
+
+                // Make API call to get LLM analysis
+                $.ajax({
+                    url: `/api/kg/graphs/${currentGraphId}/llm-analysis`,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ metrics: currentMetricsData }), // Send metrics data
+                    timeout: 180000, // 3 minutes timeout for LLM
+                    success: function(response) {
+                        llmLoading.hide();
+                         $('#llm-analysis-toggle').prop('disabled', false); // Re-enable toggle
+                        if (response.status === 'success' && response.analysis) {
+                             llmAnalysisCache[currentGraphId] = response.analysis; // Cache result
+                            const htmlOutput = marked.parse(response.analysis);
+                            llmContent.html(htmlOutput).show();
+                        } else {
+                            llmError.text('获取分析报告失败: ' + (response.message || '未知错误')).show();
+                            $('#llm-analysis-toggle').prop('checked', false); // Reset toggle on error
+                        }
+                    },
+                    error: function(xhr) {
+                        llmLoading.hide();
+                         $('#llm-analysis-toggle').prop('disabled', false); // Re-enable toggle
+                         $('#llm-analysis-toggle').prop('checked', false); // Reset toggle on error
+                        let errorMsg = '生成分析报告时出错: ';
+                         if (xhr.status === 0) {
+                            errorMsg += '无法连接到服务器或请求超时。';
+                        } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMsg += xhr.responseJSON.message;
+                        } else {
+                            errorMsg += xhr.statusText + ` (${xhr.status})`;
+                        }
+                        llmError.text(errorMsg).show();
+                    }
+                });
+            } else {
+                 llmError.text('无法生成分析，缺少指标数据。请先选择一个图谱。').show();
+                 $(this).prop('checked', false); // Reset toggle
+            }
+        } else {
+            // Toggle is OFF
+            llmContent.hide().empty(); // Hide and clear content
+            llmPlaceholder.show(); // Show placeholder
+        }
+    });
+
+});
+</script>
+{% endblock %}

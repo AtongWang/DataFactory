@@ -1,0 +1,113 @@
+# Git相关
+.git
+.gitignore
+
+# Python相关
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 虚拟环境（不要把本地 .venv 打进镜像，避免覆盖构建生成的 venv）
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# 评估相关（用户明确表示不需要）
+evaluation/
+
+# 日志文件
+logs/
+*.log
+
+# 数据库文件
+*.db
+*.sqlite3
+db_file/
+chroma_db/
+chroma_db_video/
+test_chroma_db/
+chromadb_backup/
+
+# 临时文件和缓存
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nyc_output
+config.json
+
+# IDE和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS生成的文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node.js相关
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 配置文件
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Docker相关
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
+
+# 文档和说明
+*.md
+docs/
+dev_note/
+
+# 测试文件
+test/
+tests/
+*_test.py
+test_*.py
+
+# 数据文件
+data/
+original_data/
+exports/
+
+# 备份文件
+*.bak
+*.backup

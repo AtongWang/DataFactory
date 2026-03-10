@@ -1,0 +1,1308 @@
+{% extends "layout.html" %}
+
+{% block title %}WisdominDATA - 数据导入{% endblock %}
+
+{% block content %}
+<h1 class="page-title" data-i18n="data_import.title">数据导入</h1>
+
+<div class="card">
+    <h2 class="card-title" data-i18n="data_import.upload_data_file">上传数据文件</h2>
+    <p data-i18n="data_import.support_formats">支持CSV、Excel等结构化数据文件格式。系统将智能分析您的数据结构并导入数据库。</p>
+    
+    <form id="upload-form" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file" class="form-label" data-i18n="data_import.select_file">选择文件</label>
+            <input type="file" id="file" name="file" class="form-control" accept=".csv,.xlsx,.xls" required>
+        </div>
+
+        <!-- 导入模式选择 -->
+        <div class="form-group">
+            <label class="form-label" data-i18n="data_import.import_mode">导入模式</label>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="importMode" id="modeReplace" value="replace" checked>
+                <label class="form-check-label" for="modeReplace" data-i18n="data_import.create_new_or_replace">创建新表或替换现有表</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="importMode" id="modeAppend" value="append">
+                <label class="form-check-label" for="modeAppend" data-i18n="data_import.append_to_existing">追加到现有表</label>
+            </div>
+        </div>
+
+        <!-- 表名输入/选择 -->
+        <div class="form-group" id="tableNameGroupReplace">
+            <label for="tableNameInput" class="form-label" data-i18n="data_import.table_name">表名</label>
+            <input type="text" id="tableNameInput" name="table-name" class="form-control" data-i18n-placeholder="data_import.table_name_placeholder" placeholder="留空将使用文件名作为表名">
+            <small class="form-text text-muted" data-i18n="data_import.table_name_help">输入新表名或要替换的现有表名。</small>
+        </div>
+        <div class="form-group" id="tableNameGroupAppend" style="display: none;">
+            <label for="tableNameSelect" class="form-label" data-i18n="data_import.select_target_table">选择目标表</label>
+            <select id="tableNameSelect" name="table-name-select" class="form-select">
+                <option value="" disabled selected data-i18n="data_import.select_file_first">请先选择文件并点击"上传并分析"</option>
+                <!-- 现有表将动态加载 -->
+            </select>
+             <small class="form-text text-muted" data-i18n="data_import.append_table_help">选择要追加数据的现有表。</small>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" data-i18n="data_import.import_options">导入选项</label>
+            <div class="checkbox-group">
+                 <label id="headerLabel" class="d-none">
+                    <input type="checkbox" id="header" name="header" checked>
+                    <span data-i18n="data_import.first_row_header">第一行为表头</span>
+                </label>
+                <label id="aiAnalysisLabel">
+                    <input type="checkbox" id="ai-analysis" name="ai-analysis" checked>
+                    <span data-i18n="data_import.ai_analysis">使用AI智能分析（处理合并单元格、识别数据类型）</span>
+                </label>
+                <label id="complexStructureLabel">
+                    <input type="checkbox" id="complex-structure" name="complex-structure" checked>
+                    <span data-i18n="data_import.complex_structure">处理复杂表结构（合并单元格、多级表头）</span>
+                </label>
+                 <label id="previewLabel">
+                    <input type="checkbox" id="preview" name="preview" checked>
+                    <span data-i18n="data_import.preview_before_import">导入前预览和设置</span>
+                </label>
+                <div id="structureRangeOptions" class="mt-2 p-2 border rounded" style="display: none;">
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label small" data-i18n="data_import.title_row_number">表标题行号</label>
+                            <input type="number" class="form-control form-control-sm" id="title-row" value="1" min="0" max="10">
+                            <small class="text-muted" data-i18n="data_import.no_title">0=无标题</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small" data-i18n="data_import.header_start_row">表头开始行</label>
+                            <input type="number" class="form-control form-control-sm" id="header-start" value="2" min="1" max="10">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small" data-i18n="data_import.header_rows">表头行数</label>
+                            <input type="number" class="form-control form-control-sm" id="header-rows" value="1" min="1" max="5">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <button type="submit" class="btn btn-primary" data-i18n="data_import.upload_and_analyze">上传并分析</button>
+    </form>
+</div>
+
+<div class="card" id="preview-card" style="display: none;">
+     <h2 class="card-title" id="previewTitle" data-i18n="data_import.data_preview">数据预览和列设置</h2>
+     <div id="preview-container" class="mb-4">
+         <!-- 预览内容 -->
+     </div>
+    
+    <div class="form-group">
+         <h3 id="columnSettingsTitle" data-i18n="data_import.column_settings">列设置</h3>
+         <p id="columnMappingDescription" class="text-muted" style="display: none;" data-i18n="data_import.column_mapping_description">将上传文件中的列（左侧）映射到目标数据库表中的列（右侧）。选择"--不导入--"则忽略该文件列。</p>
+         <div id="column-settings">
+             <div class="table-responsive">
+                 <table class="table table-bordered">
+                     <thead id="columnSettingsHeader">
+                         <!-- 表头将根据模式动态生成 -->
+                     </thead>
+                     <tbody id="columnSettingsBody">
+                         <!-- 列设置将通过JavaScript动态生成 -->
+                     </tbody>
+                 </table>
+             </div>
+         </div>
+     </div>
+    
+    <div class="mt-3">
+        <button id="import-btn" class="btn btn-primary" data-i18n="data_import.import_data">确认导入到数据库</button>
+        <button id="cancel-btn" class="btn btn-secondary" data-i18n="common.cancel">取消</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="card-title" data-i18n="data_import.recent_imports_title">最近导入的数据</h2>
+    <div id="recent-imports">
+        <p data-i18n="common.loading">加载中...</p>
+        <!-- 最近导入列表将通过JavaScript动态加载 -->
+    </div>
+</div>
+{% endblock %}
+
+{% block additional_scripts %}
+<script>
+    $(document).ready(function() {
+        // 全局变量存储状态
+        let currentImportMode = 'replace';
+        let existingTables = [];
+        let targetTableSchema = []; // 存储目标表结构 {name: string, type: string}[]
+        let previewData = null; // 存储上传文件的预览数据
+
+        // 立即加载最近导入的数据列表
+        loadRecentImports();
+        
+        // --- UI 交互逻辑 ---
+
+        // 处理复杂结构选项控制结构范围设置的显示隐藏
+        $('#complex-structure').change(function() {
+            if ($(this).is(':checked')) {
+                $('#structureRangeOptions').slideDown();
+            } else {
+                $('#structureRangeOptions').slideUp();
+            }
+        });
+
+        // 初始化时如果已选中，则显示结构范围选项
+        if ($('#complex-structure').is(':checked')) {
+            $('#structureRangeOptions').show();
+        }
+
+        // 切换导入模式
+        $('input[name="importMode"]').change(function() {
+            currentImportMode = $(this).val();
+            if (currentImportMode === 'append') {
+                $('#tableNameGroupReplace').hide();
+                $('#tableNameGroupAppend').show();
+                $('#aiAnalysisLabel').hide(); // AI分析主要用于新表结构，追加时不适用
+                $('#previewTitle').text(i18nHelper.t('data_import.data_preview_and_mapping'));
+                $('#columnSettingsTitle').text(i18nHelper.t('data_import.column_mapping'));
+                $('#columnMappingDescription').show();
+                // 清空并尝试加载现有表（如果文件已选）
+                                 $('#tableNameSelect').html(`<option value="" disabled selected>${i18nHelper.t('data_import.js.loading_in_progress')}</option>`);
+                 fetchExistingTables();
+                 // 更新列设置表头 (如果预览数据已加载)
+                 if (previewData) updateColumnSettingsUI();
+                
+            } else { // replace mode
+                $('#tableNameGroupReplace').show();
+                $('#tableNameGroupAppend').hide();
+                $('#aiAnalysisLabel').show();
+                $('#previewTitle').text(i18nHelper.t('data_import.data_preview'));
+                $('#columnSettingsTitle').text(i18nHelper.t('data_import.column_settings'));
+                 $('#columnMappingDescription').hide();
+                 // 更新列设置表头 (如果预览数据已加载)
+                  if (previewData) updateColumnSettingsUI();
+            }
+             // 切换模式后隐藏预览卡片，需要重新上传分析
+             $('#preview-card').hide();
+             previewData = null;
+        });
+
+        // 选择目标表 (追加模式)
+        $('#tableNameSelect').change(function() {
+            const selectedTable = $(this).val();
+            if (selectedTable) {
+                fetchTableSchema(selectedTable);
+            } else {
+                 targetTableSchema = [];
+                 if (previewData) updateColumnSettingsUI(); // 清空映射下拉框
+            }
+        });
+
+         // 文件选择变化时，重置追加模式的表选择和预览
+         $('#file').change(function() {
+             $('#preview-card').hide();
+             previewData = null;
+             if (currentImportMode === 'append') {
+                 $('#tableNameSelect').html(`<option value="" disabled selected>${i18nHelper.t('data_import.js.select_file_and_analyze')}</option>`);
+                 targetTableSchema = [];
+             }
+         });
+
+
+        // --- API 调用函数 ---
+
+        // 获取现有表列表
+        function fetchExistingTables() {
+            $.ajax({
+                url: '/api/existing-tables',
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success' && response.tables) {
+                        existingTables = response.tables;
+                        let optionsHtml = `<option value="" disabled selected>${i18nHelper.t('data_import.js.select_file_and_analyze')}</option>`;
+                        existingTables.forEach(table => {
+                            optionsHtml += `<option value="${table}">${table}</option>`;
+                        });
+                        $('#tableNameSelect').html(optionsHtml);
+                    } else {
+                         $('#tableNameSelect').html(`<option value="" disabled>${i18nHelper.t('data_import.js.cannot_load_tables')}</option>`);
+                         i18nHelper.showTranslatedAlert('data_import.js.get_table_list_failed');
+                    }
+                },
+                error: function(xhr) {
+                     $('#tableNameSelect').html(`<option value="" disabled>${i18nHelper.t('data_import.js.cannot_load_tables')}</option>`);
+                     i18nHelper.showTranslatedAlert('data_import.js.get_table_list_failed');
+                }
+            });
+        }
+
+        // 获取指定表的结构
+        function fetchTableSchema(tableName) {
+            if (!tableName) return;
+            $.ajax({
+                url: '/api/table-schema',
+                type: 'GET',
+                data: { table_name: tableName },
+                success: function(response) {
+                    if (response.status === 'success' && response.schema) {
+                        targetTableSchema = response.schema;
+                        // 如果预览数据已存在，更新列设置界面
+                        if (previewData) {
+                             updateColumnSettingsUI();
+                        }
+                    } else {
+                        targetTableSchema = [];
+                         if (previewData) updateColumnSettingsUI(); // 清空映射
+                        alert(`${i18nHelper.t('data_import.js.get_table_list_failed')} '${tableName}': ` + (response.message || i18nHelper.t('data_import.recent.unknown')));
+                    }
+                },
+                error: function(xhr) {
+                    targetTableSchema = [];
+                     if (previewData) updateColumnSettingsUI(); // 清空映射
+                    alert(`${i18nHelper.t('data_import.js.get_table_list_failed')} '${tableName}': ` + (xhr.responseJSON?.message || i18nHelper.t('data_import.js.network_error')));
+                }
+            });
+        }
+
+
+        // --- 上传与预览逻辑 (修改 uploadFile 和 showPreview) ---
+
+        // 上传表单提交
+        $('#upload-form').submit(function(e) {
+            e.preventDefault();
+
+            const fileInput = $('#file')[0];
+            if (!fileInput.files || !fileInput.files[0]) {
+                i18nHelper.showTranslatedAlert('data_import.js.please_select_file');
+                return;
+            }
+            // 如果是追加模式，需要先选择目标表
+            if (currentImportMode === 'append' && !$('#tableNameSelect').val()) {
+                 i18nHelper.showTranslatedAlert('data_import.js.please_select_target_table');
+                 return; // 或者可以在这里触发 fetchExistingTables
+            }
+
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // 添加选项参数
+            const hasHeader = $('#header').is(':checked');
+            const useAI = $('#ai-analysis').is(':checked') && currentImportMode === 'replace'; // AI仅替换模式
+            const showPreview = $('#preview').is(':checked');
+            
+            formData.append('use_ai', useAI);
+            // formData.append('show_preview', showPreview); // 后端不再需要此参数，预览总是在前端处理
+
+             // 如果是追加模式，先获取表结构
+             if (currentImportMode === 'append') {
+                 const targetTable = $('#tableNameSelect').val();
+                 if (!targetTable) {
+                     i18nHelper.showTranslatedAlert('js.please_select_table_to_append');
+                     return;
+                 }
+                 fetchTableSchema(targetTable); // 确保获取最新的schema
+             }
+
+
+            // 显示Toast加载状态，而不是在preview-container中显示转圈
+            let currentAnalysisToastId = null;
+                         if (useAI) {
+                 currentAnalysisToastId = showImportToast(i18nHelper.t('data_import.js.analyzing_file_with_ai'), 'info', false);
+             } else {
+                 currentAnalysisToastId = showImportToast(i18nHelper.t('data_import.js.analyzing_file_basic'), 'info', false);
+             }
+            
+            // 显示预览卡片但不显示转圈动画
+            $('#preview-card').show();
+            $('#preview-container').html(''); // 清空预览容器
+            $('#columnSettingsBody').html(''); // 清空旧设置
+
+            // 处理无表头情况 (与之前类似，但调用 uploadFile 时机不同)
+            if (!hasHeader) {
+                if (file.name.match(/\.(xlsx|xls)$/i)) {
+                    formData.append('has_header', 'false');
+                    uploadFile(formData, currentAnalysisToastId); // 传递Toast ID
+                    return;
+                }
+                // CSV 读取第一行获取列数
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const firstLine = e.target.result.split('\n')[0];
+                        const columnCount = firstLine.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).length; // 更可靠的CSV分割
+                        showHeaderInputModal(columnCount, formData, currentAnalysisToastId);
+                    } catch (error) {
+                        console.error('读取文件失败:', error);
+                        // 隐藏分析Toast并显示错误
+                        hideImportToast(currentAnalysisToastId);
+                        showImportToast(i18nHelper.t('data_import.js.file_read_failed'), 'danger', false);
+                        $('#preview-card').hide();
+                    }
+                };
+                 reader.onerror = function() {
+                     hideImportToast(currentAnalysisToastId);
+                     showImportToast(i18nHelper.t('data_import.js.file_read_failed'), 'danger', false);
+                     $('#preview-card').hide();
+                 };
+                reader.readAsText(file, 'UTF-8'); // 指定编码
+                return;
+            }
+
+            // 有表头，直接上传
+            formData.append('has_header', 'true');
+            uploadFile(formData, currentAnalysisToastId);
+        });
+        
+        // 文件上传函数 (微调)
+        function uploadFile(formData, analysisToastId) {
+            const file = $('#file')[0].files[0];
+            
+            // 添加复杂表格结构处理选项
+            const processComplexStructure = $('#complex-structure').is(':checked');
+            formData.append('process_complex_structure', processComplexStructure ? 'true' : 'false');
+            
+            // 如果处理复杂结构，添加用户指定的结构范围参数
+            if (processComplexStructure) {
+                // 表标题行号 (0表示无标题)
+                const titleRow = parseInt($('#title-row').val()) || 0;
+                formData.append('title_row', titleRow);
+                
+                // 表头开始行
+                const headerStart = parseInt($('#header-start').val()) || 2;
+                formData.append('header_start_row', headerStart);
+                
+                // 表头行数
+                const headerRows = parseInt($('#header-rows').val()) || 1;
+                formData.append('header_rows', headerRows);
+            }
+
+            $.ajax({
+                url: '/api/upload-file',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    // 隐藏分析Toast
+                    if (analysisToastId) {
+                        hideImportToast(analysisToastId);
+                    }
+                    
+                    if (response.status === 'success') {
+                         // 显示分析完成Toast
+                         showImportToast(i18nHelper.t('data_import.js.file_analysis_complete'), 'success', true, 3000);
+                         
+                         // 保存预览数据
+                         previewData = response.preview;
+                         previewData.file_name = file.name;
+                         previewData.file_path = file.name; // 前端只有文件名
+                         
+                         if ($('#preview').is(':checked')) {
+                             showPreview(previewData); // 显示预览和设置
+                         } else {
+                              // 直接导入 (如果用户取消了预览选项)
+                              handleImportConfirmation();
+                         }
+                    } else {
+                        showImportToast(i18nHelper.t('data_import.js.file_analysis_failed') + ': ' + response.message, 'danger', false);
+                        $('#preview-card').hide();
+                         previewData = null;
+                    }
+                },
+                error: function(xhr) {
+                    // 隐藏分析Toast
+                    if (analysisToastId) {
+                        hideImportToast(analysisToastId);
+                    }
+                    showImportToast(i18nHelper.t('data_import.js.file_upload_failed') + ': ' + (xhr.responseJSON?.message || i18nHelper.t('data_import.js.network_error')), 'danger', false);
+                    $('#preview-card').hide();
+                     previewData = null;
+                }
+            });
+        }
+
+
+        // 显示数据预览和列设置 (核心修改)
+        function showPreview(data) {
+            previewData = data; // 确保全局变量更新
+             if (!previewData || !previewData.columns || !previewData.preview) {
+                 alert(i18nHelper.t('data_import.js.data_format_error'));
+                 $('#preview-card').hide();
+                 return;
+             }
+
+             // 添加表格结构信息（如果存在）
+             let structureInfoHTML = '';
+             if (previewData.excel_structure) {
+                 const structure = previewData.excel_structure;
+                 let structureDetails = [];
+                 
+                 // 显示表标题
+                 if (structure.has_title) {
+                     structureDetails.push(`<span class="badge bg-success">${i18nHelper.t('data_import.js.title_detected')}: ${escapeHtml(structure.title_text || i18nHelper.t('data_import.js.no_title_text'))}</span>`);
+                 }
+                 
+                 // 显示表头信息
+                 if (structure.has_complex_header) {
+                     structureDetails.push(`<span class="badge bg-info">${i18nHelper.t('data_import.js.complex_header')} (${structure.header_rows}${i18nHelper.t('data_import.js.rows')})</span>`);
+                 }
+                 
+                 // 显示合并单元格信息
+                 if (structure.has_merged_cells_in_body) {
+                     structureDetails.push(`<span class="badge bg-warning">${i18nHelper.t('data_import.js.merged_cells_detected')}</span>`);
+                 }
+                 
+                 if (structureDetails.length > 0) {
+                     structureInfoHTML = `
+                         <div class="alert alert-info mb-3">
+                             <h6>${i18nHelper.t('data_import.js.complex_table_detected')}</h6>
+                             <div>${structureDetails.join(' ')}</div>
+                         </div>
+                     `;
+                 }
+             }
+
+             // 1. 构建预览表格 (添加表结构信息)
+             let previewHTML = structureInfoHTML + `
+                 <h6>${i18nHelper.t('data_import.js.data_preview_rows')}</h6>
+                 <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                     <table class="table table-striped table-sm">
+                         <thead>
+                             <tr>${previewData.columns.map(col => `<th>${escapeHtml(col)}</th>`).join('')}</tr>
+                         </thead>
+                         <tbody>
+                             ${previewData.preview.map(row => `
+                                 <tr>${previewData.columns.map(col => `<td>${escapeHtml(row[col])}</td>`).join('')}</tr>
+                             `).join('')}
+                         </tbody>
+                     </table>
+                 </div>
+                 <p class="text-muted small">${i18nHelper.t('data_import.js.total_records_columns', {total_rows: previewData.total_rows, total_columns: previewData.total_columns})}</p>
+             `;
+             $('#preview-container').html(previewHTML);
+
+             // 2. 更新列设置UI (根据模式)
+             updateColumnSettingsUI();
+
+
+            // 3. 绑定按钮事件
+            $('#import-btn').off('click').on('click', handleImportConfirmation);
+            $('#cancel-btn').off('click').on('click', function() {
+                $('#preview-card').hide();
+                $('#file').val('');
+                 previewData = null;
+                 targetTableSchema = [];
+                 if(currentImportMode === 'append') {
+                     $('#tableNameSelect').val('');
+                 }
+            });
+
+            $('#preview-card').show();
+        }
+
+        // 更新列设置的表头和内容
+        function updateColumnSettingsUI() {
+             if (!previewData) return;
+
+             let headerHtml = '';
+             let bodyHtml = '';
+
+             if (currentImportMode === 'replace') {
+                 // --- 替换模式表头 ---
+                 headerHtml = `
+                     <tr>
+                         <th style="width: 5%;"><input type="checkbox" id="selectAllColumns" checked title="${i18nHelper.t('data_import.table.select_all')}"></th>
+                         <th style="width: 25%;">${i18nHelper.t('data_import.table.original_column')}</th>
+                         <th style="width: 25%;">${i18nHelper.t('data_import.table.import_column')}</th>
+                         <th style="width: 25%;">${i18nHelper.t('data_import.table.recommended_type')}</th>
+                         <th style="width: 15%;">${i18nHelper.t('data_import.table.type_description')}</th>
+                         <th style="width: 5%;">${i18nHelper.t('data_import.table.primary_key')}</th>
+                     </tr>
+                 `;
+                 // --- 替换模式内容 ---
+                 const analysisMap = {};
+                 if (previewData.column_analysis) {
+                     previewData.column_analysis.forEach(a => { analysisMap[a.original_name] = a; });
+                 }
+
+                 previewData.columns.forEach(col => {
+                     const analysis = analysisMap[col];
+                     const recommendedType = analysis ? analysis.recommended_type : 'VARCHAR(255)';
+                     const typeDesc = analysis ? analysis.type_description : i18nHelper.t('data_import.table.default_string');
+                     const translatedName = analysis ? analysis.translated_name : col;
+                     // 清理列名作为默认导入名
+                     const cleanedColName = cleanDbName(translatedName || col);
+
+
+                     bodyHtml += `
+                         <tr>
+                             <td><div class="form-check"><input class="form-check-input column-select" type="checkbox" value="${escapeHtml(col)}" checked></div></td>
+                             <td>${escapeHtml(col)}</td>
+                             <td><input type="text" class="form-control form-control-sm column-name" value="${escapeHtml(cleanedColName)}" data-original="${escapeHtml(col)}"></td>
+                             <td><input type="text" class="form-control form-control-sm data-type" value="${recommendedType}" data-original="${escapeHtml(col)}"></td>
+                             <td><small class="text-muted">${typeDesc}</small></td>
+                             <td><div class="form-check d-flex justify-content-center"><input class="form-check-input primary-key-select" type="radio" name="primary_key" value="${escapeHtml(col)}"></div></td>
+                         </tr>
+                     `;
+                 });
+
+             } else { // append mode
+                 // --- 追加模式表头 ---
+                 headerHtml = `
+                     <tr>
+                         <th style="width: 30%;">${i18nHelper.t('data_import.table.file_column')}</th>
+                         <th style="width: 10%;">${i18nHelper.t('data_import.table.data_preview')}</th>
+                         <th style="width: 60%;">${i18nHelper.t('data_import.table.map_to_target')}</th>
+                     </tr>
+                 `;
+                 // --- 追加模式内容 ---
+                 if (!targetTableSchema || targetTableSchema.length === 0) {
+                     bodyHtml = `<tr><td colspan="3" class="text-center text-danger">${i18nHelper.t('data_import.js.cannot_load_table_structure')}</td></tr>`;
+                 } else {
+                     previewData.columns.forEach((fileCol, index) => {
+                         // 简单的预览值
+                         const sampleValue = previewData.preview.length > 0 ? (previewData.preview[0][fileCol] ?? 'N/A') : 'N/A';
+
+                         // 构建目标列下拉选项
+                         let targetOptionsHtml = `<option value="do_not_import">${i18nHelper.t('data_import.table.do_not_import')}</option>`;
+                         let bestMatch = null;
+                         let highScore = -1;
+
+                        // 尝试智能匹配 (基于名字相似度 - 可改进)
+                        const normalizedFileCol = cleanDbName(fileCol.toLowerCase());
+                        targetTableSchema.forEach(targetCol => {
+                            const normalizedTargetCol = cleanDbName(targetCol.name.toLowerCase());
+                            const score = stringSimilarity(normalizedFileCol, normalizedTargetCol);
+                            if (score > highScore && score > 0.3) { // 设定一个匹配阈值
+                                highScore = score;
+                                bestMatch = targetCol.name;
+                            }
+                            targetOptionsHtml += `<option value="${escapeHtml(targetCol.name)}">${escapeHtml(targetCol.name)} (${escapeHtml(targetCol.type)})</option>`;
+                        });
+
+
+                         bodyHtml += `
+                             <tr>
+                                 <td>${escapeHtml(fileCol)}</td>
+                                 <td><small class="text-muted"><em>${escapeHtml(String(sampleValue).substring(0, 20))}...</em></small></td>
+                                 <td>
+                                     <select class="form-select form-select-sm column-map-select" data-original="${escapeHtml(fileCol)}">
+                                         ${targetOptionsHtml}
+                                     </select>
+                                 </td>
+                             </tr>
+                         `;
+                         // 在添加到DOM后，设置选中项
+                         setTimeout(() => {
+                              const selectElement = $(`#columnSettingsBody select[data-original="${escapeHtml(fileCol)}"]`);
+                              if (selectElement.length > 0 && bestMatch) {
+                                  selectElement.val(bestMatch);
+                              } else if (selectElement.length > 0) {
+                                  selectElement.val('do_not_import'); // 默认不导入
+                              }
+                          }, 0);
+                     });
+                 }
+             }
+
+             $('#columnSettingsHeader').html(headerHtml);
+             $('#columnSettingsBody').html(bodyHtml);
+
+             // 重新绑定全选事件 (仅替换模式)
+             if (currentImportMode === 'replace') {
+                 $('#selectAllColumns').off('change').on('change', function() {
+                     $('.column-select').prop('checked', $(this).prop('checked'));
+                 });
+                 $('.column-select').off('change').on('change', function() {
+                      if ($('.column-select:checked').length === $('.column-select').length) {
+                          $('#selectAllColumns').prop('checked', true);
+                      } else {
+                          $('#selectAllColumns').prop('checked', false);
+                      }
+                  });
+             }
+        }
+
+
+        // --- 数据导入逻辑 (核心修改) ---
+        function handleImportConfirmation() {
+             if (!previewData) {
+                 alert(i18nHelper.t('data_import.js.no_preview_data'));
+                 return;
+             }
+
+             let tableName = '';
+             let importPayload = {
+                 import_mode: currentImportMode,
+                 data: previewData.all_data, // 完整数据
+                 file_name: previewData.file_name,
+                 file_path: previewData.file_path
+             };
+             
+             // 添加Excel结构信息
+             if (previewData.excel_structure) {
+                 importPayload.excel_structure = previewData.excel_structure;
+             }
+
+             if (currentImportMode === 'replace') {
+                 // --- 替换模式的数据处理 ---
+                 tableName = $('#tableNameInput').val() || cleanDbName(previewData.file_name) || 'imported_data'; // 确保表名合法
+                 if (!tableName) {
+                     alert(i18nHelper.t('data_import.js.please_enter_table_name'));
+                     return;
+                 }
+                 importPayload.table_name = tableName;
+
+                 // 获取选中的列 (原始名称)
+                 importPayload.selected_columns = $('.column-select:checked').map(function() {
+                     return $(this).val();
+                 }).get();
+
+                 if (importPayload.selected_columns.length === 0) {
+                     alert(i18nHelper.t('data_import.js.please_select_column'));
+                     return;
+                 }
+
+                 // 获取列名映射 { original: new_name } 和数据类型设置 { original: { type: ... } }
+                 importPayload.column_mapping = {};
+                 importPayload.column_settings = {};
+                 $('.column-select:checked').each(function() {
+                      const originalName = $(this).val();
+                      const row = $(this).closest('tr');
+                      const newName = row.find('.column-name').val();
+                      const dataType = row.find('.data-type').val();
+
+                      if (originalName !== newName && newName) {
+                          importPayload.column_mapping[originalName] = newName;
+                      } else if (!newName) {
+                           // 如果新名称为空，则使用清理后的原始名称
+                           importPayload.column_mapping[originalName] = cleanDbName(originalName);
+                      } else {
+                           importPayload.column_mapping[originalName] = originalName; // 保持不变也要映射，以便后端处理
+                      }
+                      importPayload.column_settings[originalName] = { type: dataType || 'VARCHAR(255)' };
+                  });
+
+
+                 // 获取选中的主键 (原始名称)
+                 importPayload.primary_key = $('input[name="primary_key"]:checked').val() || null;
+
+
+             } else { // append mode
+                 // --- 准备追加模式的数据 ---
+                 tableName = $('#tableNameSelect').val();
+                 if (!tableName) {
+                     alert(i18nHelper.t('data_import.js.select_target_table'));
+                     return;
+                 }
+                 importPayload.table_name = tableName;
+
+                 // 获取列映射 { file_column: target_table_column }
+                 importPayload.column_mapping = {};
+                 const selectedFileColumnsForAppend = []; // 追踪实际要发送的文件列
+                 $('.column-map-select').each(function() {
+                     const fileColumn = $(this).data('original');
+                     const targetColumn = $(this).val();
+                     if (targetColumn !== 'do_not_import') {
+                          importPayload.column_mapping[fileColumn] = targetColumn;
+                          selectedFileColumnsForAppend.push(fileColumn);
+                     }
+                  });
+
+                 if (Object.keys(importPayload.column_mapping).length === 0) {
+                     alert(i18nHelper.t('data_import.js.map_at_least_one_column'));
+                     return;
+                 }
+                 // 追加模式下，selected_columns 指的是文件中参与映射的列
+                 importPayload.selected_columns = selectedFileColumnsForAppend;
+
+                 // 追加模式不需要 column_settings 和 primary_key
+                 importPayload.column_settings = {}; // 发送空对象
+                 importPayload.primary_key = null;
+                 
+                 console.log("Append mode payload prepared:", JSON.stringify(importPayload)); // 添加日志
+             }
+
+
+                         // --- 发送导入请求 ---
+            currentImportToastId = showImportToast('正在导入数据...', 'info', false); // 显示进度Toast
+            console.log("Showing import progress toast and starting AJAX call."); // 确认Toast已显示，请求将开始
+
+             $.ajax({
+                 url: '/api/import-data',
+                 type: 'POST',
+                 contentType: 'application/json',
+                 data: JSON.stringify(importPayload),
+                 success: function(response) {
+                     console.log("Import Success Response (Append Mode? " + (currentImportMode === 'append') + "):", response);
+                     
+                                         try { 
+                        if (response.status === 'success') {
+                            // 隐藏进度Toast
+                            hideImportToast(currentImportToastId);
+                            // 显示成功Toast
+                            showImportToast(response.message || i18nHelper.t('data_import.js.import_success_message', {rows_imported: response.rows_imported}), 'success', true, 5000);
+                            $('#preview-card').hide(); 
+                            $('#file').val(''); 
+                            previewData = null; 
+                            targetTableSchema = []; 
+                            if(currentImportMode === 'append') {
+                                $('#tableNameSelect').val(''); 
+                            }
+                        } else {
+                           console.error("API Error reported by backend (Append Mode? " + (currentImportMode === 'append') + "):", response.message);
+                           // 隐藏进度Toast
+                           hideImportToast(currentImportToastId);
+                           // 显示错误Toast
+                           showImportToast(i18nHelper.t('data_import.js.data_import_failed') + ': ' + response.message, 'danger', false);
+                        }
+                                          } catch (e) { 
+                         console.error("Error inside success callback:", e);
+                         // 隐藏进度Toast
+                         hideImportToast(currentImportToastId);
+                         if (response && response.status === 'success') {
+                             showImportToast(i18nHelper.t('data_import.js.import_failed_interface_error'), 'danger', false);
+                         } else if (!response || response.status !== 'success') {
+                             showImportToast(i18nHelper.t('data_import.js.import_failed_interface_update_error'), 'danger', false);
+                         }
+                    }
+                 },
+                                 error: function(xhr) {
+                     console.error("Import Error Response (Append Mode? " + (currentImportMode === 'append') + "):", xhr.status, xhr.responseText); 
+                     // 隐藏进度Toast
+                     hideImportToast(currentImportToastId);
+                     // 显示错误Toast
+                     showImportToast(i18nHelper.t('data_import.js.data_import_failed') + ': ' + (xhr.responseJSON?.message || i18nHelper.t('data_import.js.network_error')), 'danger', false);
+                }
+             });
+        }
+
+        // --- 辅助函数 ---
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+             return String(str)
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;")
+                  .replace(/"/g, "&quot;")
+                  .replace(/'/g, "&#039;");
+        }
+
+         // 清理名称以符合数据库命名规范 (简化版)
+         function cleanDbName(name) {
+             if (!name) return '';
+             let cleaned = String(name).trim();
+             // 替换中文括号
+             cleaned = cleaned.replace(/[（）]/g, '_');
+              // 替换空格和常见分隔符为下划线
+              cleaned = cleaned.replace(/[\s\-\.\/]/g, '_');
+              // 移除非字母数字下划线或中文字符
+              cleaned = cleaned.replace(/[^a-zA-Z0-9_\u4e00-\u9fff]/g, '');
+              // 确保不以数字开头
+              if (/^[0-9]/.test(cleaned)) {
+                  cleaned = '_' + cleaned;
+              }
+              // 转小写（根据需要）
+              // cleaned = cleaned.toLowerCase();
+              // 防止空名称
+              if (!cleaned) {
+                  cleaned = 'column_' + Math.random().toString(36).substring(7);
+              }
+              return cleaned.substring(0, 64); // 限制长度 (MySQL limit)
+         }
+
+         // 简单的字符串相似度计算 (Levenshtein distance based - optional, for matching)
+         function stringSimilarity(s1, s2) {
+             let longer = s1;
+             let shorter = s2;
+             if (s1.length < s2.length) {
+                 longer = s2;
+                 shorter = s1;
+             }
+             const longerLength = longer.length;
+             if (longerLength === 0) {
+                 return 1.0;
+             }
+             return (longerLength - editDistance(longer, shorter)) / parseFloat(longerLength);
+         }
+
+         function editDistance(s1, s2) {
+             s1 = s1.toLowerCase();
+             s2 = s2.toLowerCase();
+             const costs = [];
+             for (let i = 0; i <= s1.length; i++) {
+                 let lastValue = i;
+                 for (let j = 0; j <= s2.length; j++) {
+                     if (i === 0) {
+                         costs[j] = j;
+                     } else {
+                         if (j > 0) {
+                             let newValue = costs[j - 1];
+                             if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
+                                 newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+                             }
+                             costs[j - 1] = lastValue;
+                             lastValue = newValue;
+                         }
+                     }
+                 }
+                 if (i > 0) costs[s2.length] = lastValue;
+             }
+             return costs[s2.length];
+         }
+
+        // 显示表头输入模态框 (不变)
+        function showHeaderInputModal(columnCount, formData, analysisToastId) { 
+            // 构建表头输入表单
+            let headerFormHtml = `
+                <div class="modal fade" id="headerModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">请输入列名</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="header-form" class="row">
+            `;
+            
+            // 为每一列创建输入框
+            for (let i = 0; i < columnCount; i++) {
+                headerFormHtml += `
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">第 ${i + 1} 列名称</label>
+                        <input type="text" class="form-control header-input" 
+                               name="header_${i}" placeholder="列 ${i + 1}" required
+                               value="Column_${i + 1}">
+                    </div>
+                `;
+            }
+            
+            headerFormHtml += `
+                                </form>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                <button type="button" class="btn btn-primary" id="confirm-headers">确认</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态框
+            $('#headerModal').remove();
+            
+            // 添加新的模态框
+            $('body').append(headerFormHtml);
+            
+            // 初始化模态框
+            const headerModal = new bootstrap.Modal(document.getElementById('headerModal'), {
+                backdrop: 'static',
+                keyboard: false
+            });
+            
+            // 处理确认按钮点击
+            $('#confirm-headers').off('click').on('click', function() {
+                const headers = $('.header-input').map(function() {
+                    return $(this).val() || $(this).attr('placeholder');
+                }).get();
+                
+                // 验证是否所有列名都已填写
+                if (headers.some(h => !h)) {
+                    alert(i18nHelper.t('data_import.js.all_columns_filled'));
+                    return;
+                }
+                
+                // 将表头添加到FormData
+                formData.append('custom_headers', JSON.stringify(headers));
+                
+                // 关闭模态框
+                headerModal.hide();
+                
+                // 继续上传流程
+                uploadFile(formData, analysisToastId);
+            });
+            
+            // 处理取消按钮点击
+            $('#headerModal').on('hidden.bs.modal', function() {
+                // 隐藏分析Toast
+                if (analysisToastId) {
+                    hideImportToast(analysisToastId);
+                }
+                $('#preview-card').hide();
+                $('#file').val('');
+            });
+            
+            // 显示模态框
+            headerModal.show();
+        } 
+        // Toast通知系统
+        let currentImportToastId = null;
+        
+        function showImportToast(message, type = 'info', autohide = false, delay = 5000) {
+            const toastId = 'import-toast-' + Date.now();
+            const iconHtml = type === 'info' ? '<div class="spinner-border spinner-border-sm me-2" role="status"></div>' : 
+                           type === 'success' ? '<i class="fas fa-check-circle me-2"></i>' :
+                           type === 'danger' ? '<i class="fas fa-exclamation-circle me-2"></i>' : '';
+            
+            const toastHtml = `
+                <div class="toast align-items-center text-white bg-${type}" role="alert" id="${toastId}" data-bs-autohide="${autohide}" data-bs-delay="${delay}">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            ${iconHtml}${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>`;
+            
+            // 确保Toast容器存在
+            if (!$('.toast-container').length) {
+                $('body').append('<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>');
+            }
+            
+            $('.toast-container').append(toastHtml);
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement, { 
+                autohide: autohide,
+                delay: delay
+            });
+            
+            // 自动清理Toast元素
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                $(this).remove();
+            });
+            
+            toast.show();
+            return toastId;
+        }
+        
+        function hideImportToast(toastId) {
+            if (toastId) {
+                const toastElement = document.getElementById(toastId);
+                if (toastElement) {
+                    const toast = bootstrap.Toast.getInstance(toastElement);
+                    if (toast) {
+                        toast.hide();
+                    } else {
+                        $(toastElement).remove();
+                    }
+                }
+            }
+        }
+
+
+        // 加载最近导入列表 (修改)
+        function loadRecentImports() { 
+            $('#recent-imports').html(`<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">${i18nHelper.t('common.loading')}</span></div></div>`);
+            
+            $.ajax({
+                url: '/api/import-history',
+                type: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        let recentImportsHTML = `
+                            <table class="table table-striped table-hover table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>${i18nHelper.t('data_import.recent.file_name')}</th>
+                                        <th>${i18nHelper.t('data_import.recent.table_name')}</th>
+                                        <th>${i18nHelper.t('data_import.recent.database_type')}</th>
+                                        <th>${i18nHelper.t('data_import.recent.column_count')}</th>
+                                        <th>${i18nHelper.t('data_import.recent.record_count')}</th>
+                                        <th>${i18nHelper.t('data_import.recent.import_time')}</th>
+                                        <th>${i18nHelper.t('data_import.recent.status')}</th>
+                                        <th>${i18nHelper.t('data_import.recent.actions')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        `;
+                        
+                        response.history.forEach(record => {
+                            const importTime = record.import_time ? new Date(record.import_time).toLocaleString() : 'N/A';
+                            const statusClass = record.status === 'success' ? 'text-success' : 'text-danger';
+                            // column_info 应该已经是对象了，无需再解析
+                            // const columnInfo = record.column_info || {}; // 假设后端保证是对象
+                            
+                             // 重要：对要嵌入 HTML 属性的 JSON 字符串进行转义
+                            const escapedRecordJson = escapeHtml(JSON.stringify(record)); 
+
+                            recentImportsHTML += `
+                                <tr>
+                                    <td>${escapeHtml(record.file_name)}</td>
+                                    <td>${escapeHtml(record.table_name)}</td>
+                                    <td>${escapeHtml(record.database_type)}</td>
+                                    <td>${escapeHtml(record.column_count)}</td>
+                                    <td>${escapeHtml(record.total_rows)}</td>
+                                    <td>${escapeHtml(importTime)}</td>
+                                    <td class="${statusClass}">${record.status === 'success' ? i18nHelper.t('data_import.recent.success') : i18nHelper.t('data_import.recent.failed')}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info view-details" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#importDetailsModal"
+                                                data-record='${escapedRecordJson}'>
+                                            <i class="fas fa-info-circle me-1"></i>${i18nHelper.t('data_import.recent.view_details')}
+                                        </button>
+                                        ${record.status === 'success' ? `
+                                            <button class="btn btn-sm btn-primary view-data" data-table-name="${escapeHtml(record.table_name)}">
+                                                 <i class="fas fa-table me-1"></i>${i18nHelper.t('data_import.recent.view_data')}
+                                            </button>
+                                        ` : ''}
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        
+                        recentImportsHTML += `
+                                </tbody>
+                            </table>
+                        `;
+        
+                        $('#recent-imports').html(recentImportsHTML);
+                        
+                        // ... (详情模态框创建逻辑不变) ...
+                         if (!$('#importDetailsModal').length) {
+                             $('body').append(`
+                                 <div class="modal fade" id="importDetailsModal" tabindex="-1">
+                                     <div class="modal-dialog modal-lg">
+                                         <div class="modal-content">
+                                             <div class="modal-header">
+                                                 <h5 class="modal-title">${i18nHelper.t('data_import.modal.import_details')}</h5>
+                                                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                             </div>
+                                             <div class="modal-body">
+                                                 <div id="importDetailsContent"></div>
+                                             </div>
+                                             <div class="modal-footer">
+                                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${i18nHelper.t('data_import.modal.close')}</button>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             `);
+                         }
+
+                        // 绑定详情按钮事件 (从 data-record 读取，不再解析 column_info)
+                        $('.view-details').click(function() {
+                             // 从 data-record 读取已经转义的 JSON 字符串，需要反向操作吗？
+                             // HTML 属性会自动处理基本的转义，直接读取应该可以
+                             // 但如果 escapeHtml 转义了单引号，需要小心
+                             // 更安全的方式是直接 JSON.parse($(this).attr('data-record')) 因为浏览器会自动处理属性值的解码
+                             let record;
+                             try {
+                                 record = JSON.parse($(this).attr('data-record')); 
+                             } catch(e) {
+                                  console.error("无法解析 data-record 属性:", e, $(this).attr('data-record'));
+                                  alert(i18nHelper.t('data_import.recent.parse_record_failed'));
+                                  return;
+                             }
+                             
+                            // column_info 应该已经是对象了
+                            const columnInfo = record.column_info || {}; 
+                            
+                            let detailsHtml = `
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>${i18nHelper.t('data_import.recent.basic_info')}</h6>
+                                        <table class="table table-sm">
+                                            <tr><th>${i18nHelper.t('data_import.recent.file_name')}：</th><td>${escapeHtml(record.file_name)}</td></tr>
+                                            <tr><th>${i18nHelper.t('data_import.recent.file_path')}：</th><td>${escapeHtml(record.file_path)}</td></tr>
+                                            <tr><th>${i18nHelper.t('data_import.recent.table_name')}：</th><td>${escapeHtml(record.table_name)}</td></tr>
+                                            <tr><th>${i18nHelper.t('data_import.recent.database_type')}：</th><td>${escapeHtml(record.database_type)}</td></tr>
+                                            <tr><th>${i18nHelper.t('data_import.recent.import_time')}：</th><td>${escapeHtml(new Date(record.import_time).toLocaleString())}</td></tr>
+                                            <tr><th>${i18nHelper.t('data_import.recent.import_mode')}：</th><td>${columnInfo.mode === 'append' ? i18nHelper.t('data_import.recent.append_mode') : i18nHelper.t('data_import.recent.replace_create_mode')}</td></tr>
+                                        </table>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>${i18nHelper.t('data_import.recent.data_statistics')}</h6>
+                                        <table class="table table-sm">
+                                             <tr><th>${i18nHelper.t('data_import.recent.total_rows')}：</th><td>${escapeHtml(record.total_rows)}</td></tr>
+                                             <tr><th>${i18nHelper.t('data_import.recent.column_count')}：</th><td>${escapeHtml(record.column_count)}</td></tr>
+                                             <tr><th>${i18nHelper.t('data_import.recent.status')}：</th><td class="${record.status === 'success' ? 'text-success' : 'text-danger'}">${record.status === 'success' ? i18nHelper.t('data_import.recent.success') : i18nHelper.t('data_import.recent.failed')}</td></tr>
+                                             ${(columnInfo.mode === 'replace' && (columnInfo.primary_key_original || columnInfo.primary_key_final)) ? `
+                                             <tr>
+                                                 <th>${i18nHelper.t('data_import.recent.primary_key_final')}：</th>
+                                                 <td>${escapeHtml(columnInfo.primary_key_final || i18nHelper.t('data_import.recent.not_set'))} ${columnInfo.primary_key_original && columnInfo.primary_key_original !== columnInfo.primary_key_final ? '(' + i18nHelper.t('data_import.recent.original_key') + ': ' + escapeHtml(columnInfo.primary_key_original) + ')' : ''}</td>
+                                             </tr>
+                                             ` : ''}
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="row mt-3">
+                                    <div class="col-12">
+                                        <h6>${i18nHelper.t('data_import.recent.column_info')} (${columnInfo.mode === 'append' ? i18nHelper.t('data_import.recent.mapping_relationship') : i18nHelper.t('data_import.recent.final_structure')})</h6>
+                                        <table class="table table-sm table-bordered">
+                                             <thead><tr>`;
+                            // 添加列信息表头
+                            if (columnInfo.mode === 'append') {
+                                 detailsHtml += `<th class="w-50">${i18nHelper.t('data_import.recent.file_column')}</th><th class="w-50">${i18nHelper.t('data_import.recent.target_table_column')}</th>`;
+                             } else { // replace mode
+                                 detailsHtml += `<th class="w-33">${i18nHelper.t('data_import.recent.final_column_name')}</th><th class="w-33">${i18nHelper.t('data_import.recent.requested_type')}</th><th class="w-33">${i18nHelper.t('data_import.recent.original_file_column')}</th><th>${i18nHelper.t('data_import.table.primary_key')}</th>`;
+                             }
+                             detailsHtml += `</tr></thead><tbody>`;
+                            
+                             // 添加列信息行 (确保使用 columnInfo)
+                             if (columnInfo.mode === 'append') {
+                                 if (columnInfo.mapped_columns) {
+                                     for (const fileCol in columnInfo.mapped_columns) {
+                                         detailsHtml += `<tr><td>${escapeHtml(fileCol)}</td><td>${escapeHtml(columnInfo.mapped_columns[fileCol])}</td></tr>`;
+                                     }
+                                 } else {
+                                      detailsHtml += `<tr><td colspan="2">${i18nHelper.t('data_import.recent.no_mapping_info')}</td></tr>`;
+                                 }
+                             } else { // replace mode
+                                 const finalToOriginalMap = {};
+                                 if (columnInfo.column_mapping_cleaned) {
+                                     for(const orig in columnInfo.column_mapping_cleaned) {
+                                         finalToOriginalMap[columnInfo.column_mapping_cleaned[orig]] = orig;
+                                     }
+                                 }
+                                 if (columnInfo.original_columns_selected) {
+                                      columnInfo.original_columns_selected.forEach(orig => {
+                                          const cleaned = cleanDbName(orig); 
+                                          if (columnInfo.columns && columnInfo.columns.includes(cleaned) && !(cleaned in finalToOriginalMap)) {
+                                              finalToOriginalMap[cleaned] = orig;
+                                          }
+                                          if (columnInfo.columns && columnInfo.columns.includes(orig) && !(orig in finalToOriginalMap)) {
+                                              finalToOriginalMap[orig] = orig;
+                                          }
+                                      });
+                                 }
+
+                                if (columnInfo.columns) {
+                                     columnInfo.columns.forEach(finalCol => {
+                                         const originalCol = finalToOriginalMap[finalCol] || i18nHelper.t('data_import.recent.unknown'); 
+                                         const reqType = (columnInfo.data_types_requested && columnInfo.data_types_requested[finalCol]) ? columnInfo.data_types_requested[finalCol] : i18nHelper.t('data_import.recent.unknown');
+                                         const isPk = columnInfo.primary_key_final === finalCol;
+                                         detailsHtml += `<tr><td>${escapeHtml(finalCol)}</td><td>${escapeHtml(reqType)}</td><td>${escapeHtml(originalCol)}</td><td>${isPk ? '<i class="fas fa-key text-warning"></i>' : ''}</td></tr>`;
+                                     });
+                                 } else {
+                                      detailsHtml += `<tr><td colspan="4">${i18nHelper.t('data_import.recent.no_column_info')}</td></tr>`;
+                                 }
+                            }
+                            
+                            detailsHtml += `</tbody></table></div></div>`;
+                            
+                            if (record.error_message) {
+                                detailsHtml += `
+                                    <div class="row mt-3">
+                                        <div class="col-12">
+                                            <h6>${i18nHelper.t('data_import.recent.error_message')}</h6>
+                                            <div class="alert alert-danger">${escapeHtml(record.error_message)}</div>
+                                        </div>
+                                    </div>`;
+                            }
+                            
+                            $('#importDetailsContent').html(detailsHtml);
+                        });
+                        
+                        // 绑定查看数据按钮事件 (从 data-table-name 读取表名)
+                        $('.view-data').click(function() {
+                            const tableName = $(this).data('table-name'); //直接获取表名
+                            if (!tableName) {
+                                 alert(i18nHelper.t('data_import.recent.cannot_get_table_name'));
+                                 return;
+                            }
+                            
+                            // 确保模态框 HTML 在 DOM 中
+                            if (!$('#tableDataModal').length) {
+                                $('body').append(`
+                                    <div class="modal fade" id="tableDataModal" tabindex="-1">
+                                        <div class="modal-dialog modal-xl">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">${i18nHelper.t('data_import.modal.table_data_preview')}</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button> 
+                                                </div>
+                                                <div class="modal-body">
+                                                    <div id="tableDataContent"></div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${i18nHelper.t('data_import.modal.close')}</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `);
+                            }
+                            
+                            $('#tableDataContent').html(`<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">${i18nHelper.t('common.loading')}</span></div></div>`);
+                            
+                            const modalElement = document.getElementById('tableDataModal');
+                            console.log("Modal element to initialize:", modalElement);
+                            
+                            if (modalElement) {
+                                const tableDataModalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
+                                tableDataModalInstance.show();
+                            } else {
+                                console.error("未能找到 #tableDataModal 元素！");
+                                alert(i18nHelper.t('data_import.recent.cannot_show_data_modal'));
+                                return; 
+                            }
+                            
+                            // 发送请求获取数据
+                            $.ajax({
+                                url: '/api/table-data', 
+                                type: 'GET',
+                                data: {
+                                    table_name: tableName,
+                                    limit: 100 
+                                },
+                                success: function(response) {
+                                    console.log("AJAX Success - /api/table-data response:", response); // 添加日志
+                                    if (response.status === 'success') {
+                                        let tableHtml = `
+                                            <div class="mb-3">
+                                                <h6>${i18nHelper.t('data_import.recent.table_with_name', {table_name: escapeHtml(response.table_name)})}</h6>
+                                                <p class="text-muted small">${i18nHelper.t('data_import.recent.showing_records', {count: response.data.length, total: response.total >= 0 ? response.total : i18nHelper.t('data_import.recent.unknown'), limit: response.limit})}</p>
+                                            </div>
+                                        `;
+                                        if (response.data && response.data.length > 0 && response.columns) {
+                                            tableHtml += `<div class="table-responsive" style="max-height: 60vh; overflow: auto;"><table class="table table-striped table-bordered table-sm"><thead><tr>`;
+                                            response.columns.forEach(col => { tableHtml += `<th>${escapeHtml(col)}</th>`; });
+                                            tableHtml += `</tr></thead><tbody>`;
+                                            response.data.forEach(row => {
+                                                tableHtml += '<tr>';
+                                                response.columns.forEach(col => {
+                                                     let cellValue = row[col];
+                                                     // ... (cell rendering logic - 保持不变) ...
+                                                     if (cellValue === null) {
+                                                         cellValue = '<em class="text-muted">NULL</em>';
+                                                     } else if (typeof cellValue === 'object') {
+                                                          cellValue = '<pre class="small">' + escapeHtml(JSON.stringify(cellValue, null, 2)) + '</pre>';
+                                                     } else if (typeof cellValue === 'string' && cellValue.length > 100) {
+                                                         cellValue = escapeHtml(cellValue.substring(0, 100)) + '...';
+                                                     } else {
+                                                         cellValue = escapeHtml(cellValue);
+                                                     }
+                                                     tableHtml += `<td>${cellValue}</td>`;
+                                                 });
+                                                 tableHtml += '</tr>';
+                                             });
+                                             tableHtml += `</tbody></table></div>`;
+                                         } else {
+                                             tableHtml += `<div class="alert alert-info">${i18nHelper.t('data_import.recent.no_data_or_columns')}</div>`;
+                                         }
+                                         $('#tableDataContent').html(tableHtml);
+                                    } else {
+                                        console.error("API Error reported by backend:", response.message); // 添加错误日志
+                                        $('#tableDataContent').html(`<div class="alert alert-danger">${i18nHelper.t('data_import.recent.get_data_failed')}: ${escapeHtml(response.message)}</div>`);
+                                    }
+                                },
+                                error: function(xhr, status, error) {
+                                    console.error("AJAX Error - /api/table-data request failed:", status, error, xhr.responseText, xhr); // 添加日志
+                                    $('#tableDataContent').html(`<div class="alert alert-danger">${i18nHelper.t('data_import.recent.get_data_failed')}: ${escapeHtml(xhr.responseJSON?.message || error || i18nHelper.t('data_import.js.network_error'))}</div>`);
+                                }
+                            });
+                        });
+                    } else {
+                        $('#recent-imports').html(`<div class="alert alert-danger">${i18nHelper.t('data_import.recent.load_import_history_failed')}</div>`);
+                    }
+                },
+                error: function(xhr) {
+                    $('#recent-imports').html(`<div class="alert alert-danger">${i18nHelper.t('data_import.recent.load_import_history_failed')}</div>`);
+                }
+            });
+        }
+
+    }); // end document.ready
+</script>
+{% endblock %} 

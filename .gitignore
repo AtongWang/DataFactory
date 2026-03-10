@@ -1,0 +1,69 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env
+db_file/
+chroma_db/
+exports/
+chroma_db/chroma.sqlite3
+config.json
+logs/
+backups/
+original_data/
+kg.db
+
+# NPM相关文件
+node_modules/
+package-lock.json
+
+# 前端构建产物
+static/css/vendor/
+static/js/vendor/
+static/webfonts/
+
+# 其他
+.DS_Store
+*.log
+
+#Cursor Rules
+.cursor/
+dev_note/
+cursor_methodology.md
+docker_command.md
+build_docker.md
+下一步做什么.md
+
+
+# Evaluation Datset
+evaluation/data/
+evaluation/logs/
+evaluation/results/
+evaluation/output/
+evaluation/chroma_db_1/
+evaluation/chroma_db/
+evaluation/meric_result/
+chromadb_backup/
+
+api.md
+
+paper.md
+
+evaluation/.cache/
+evaluation/results_tools/
+
+evaluation/meric_result_tools/
+test_chroma_db/
+evaluation/chroma_db_0/
+
+evaluation/meric_result_100/
+evaluation/meric_result_t/
+evaluation/tool_usage_analysis/
+
+chroma_db_video/

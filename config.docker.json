@@ -1,0 +1,59 @@
+{
+  "database": {
+    "type": "mysql",
+    "host": "${DATABASE_HOST:-localhost}",
+    "port": "${DATABASE_PORT:-3306}",
+    "username": "${DATABASE_USER:-root}",
+    "password": "${DATABASE_PASSWORD:-123456}",
+    "database_name": "${DATABASE_NAME:-evaluation_test_db}"
+  },
+  "model": {
+    "type": "openai",
+    "api_key": "${OPENROUTER_API_KEY:-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}",
+    "model_name": "${OPENROUTER_MODEL:-qwen/qwen3-14b}",
+    "api_base": "${OPENROUTER_API_BASE:-https://openrouter.ai/api/v1/}",
+    "temperature": 0.7,
+    "system_prompt": "请你根据用户的语言类型，使用同样的语言类型回答用户的问题。",
+    "num_ctx": 16000,
+    "use_provider_routing": true,
+    "provider": {
+      "order": [],
+      "allow_fallbacks": true,
+      "require_parameters": false,
+      "data_collection": "allow",
+      "only": [],
+      "ignore": [],
+      "quantizations": [],
+      "sort": "latency",
+      "max_price": {
+        "prompt": 0.1,
+        "completion": 0.3,
+        "image": null,
+        "request": null
+      }
+    }
+  },
+  "store_database": {
+    "path": "${CHROMA_DB_PATH:-./chroma_db}",
+    "embedding_function": "${OLLAMA_EMBEDDING_MODEL:-bge-m3:latest}",
+    "embedding_ollama_url": "${OLLAMA_URL:-http://localhost:11434}"
+  },
+  "naming_model": {
+    "enabled": true,
+    "prompt_template": "你是一个会话命名助手，根据以下对话内容，为这个对话生成一个简短的标题（不超过20个字符，不要有任何符号）：{conversation} ",
+    "use_system_model": false,
+    "model_type": "ollama",
+    "ollama_url": "${OLLAMA_URL:-http://localhost:11434}",
+    "ollama_model": "${OLLAMA_NAMING_MODEL:-qwen3:1.7b}",
+    "openai_api_key": "",
+    "openai_model": "gpt-3.5-turbo",
+    "openai_api_base": "https://api.openai.com/v1",
+    "vanna_api_key": "",
+    "vanna_model_name": ""
+  },
+  "neo4j": {
+    "uri": "${NEO4J_URI:-bolt://localhost:7687}",
+    "user": "${NEO4J_USER:-neo4j}",
+    "password": "${NEO4J_PASSWORD:-12345678}"
+  }
+} 

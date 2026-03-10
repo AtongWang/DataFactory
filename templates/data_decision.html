@@ -1,0 +1,130 @@
+{% extends "layout.html" %}
+
+{% block title %}数据决策 Agent{% endblock %}
+
+{% block additional_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/prism-okaidia.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/data_decision.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <h2 class="mb-4" data-i18n="data_decision.title">数据决策 Agent</h2>
+
+    <div class="row">
+        <!-- Left Column: Task List and Creation -->
+        <div class="col-lg-4 mb-4">
+            <!-- Create New Task Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0" data-i18n="data_decision.create_new_task">创建新任务</h5>
+                </div>
+                <div class="card-body">
+                    <form id="create-task-form">
+                        <div class="mb-3">
+                            <label for="task-name" class="form-label" data-i18n="data_decision.task_name">任务名称 (可选)</label>
+                            <input type="text" class="form-control" id="task-name" data-i18n-placeholder="data_decision.task_name_placeholder" placeholder="例如：分析用户增长趋势">
+                        </div>
+                        <div class="mb-3">
+                            <label for="user-goal" class="form-label" data-i18n="data_decision.task_goal">任务目标</label> <span class="text-danger">*</span>
+                            <textarea class="form-control" id="user-goal" rows="3" required data-i18n-placeholder="data_decision.task_goal_placeholder" placeholder="清晰描述你希望 Agent 完成的任务，例如：查询过去一周的每日新增用户数，并找出增长最快的一天。"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sql-table-select" class="form-label" data-i18n="data_decision.associated_database_table">关联数据库表 (可选)</label>
+                            <select class="form-select" id="sql-table-select">
+                                <option value="" data-i18n="data_decision.select_database_table">-- 选择数据库表 --</option>
+                                <!-- Options will be populated by JavaScript -->
+                            </select>
+                            <small class="form-text text-muted" data-i18n="data_decision.database_table_help">选择一个表以允许 Agent 查询。</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="kg-graph-select" class="form-label" data-i18n="data_decision.associated_knowledge_graph">关联知识图谱 (可选)</label>
+                            <select class="form-select" id="kg-graph-select">
+                                <option value="" data-i18n="data_decision.select_knowledge_graph">-- 选择知识图谱 --</option>
+                                <!-- Options will be populated by JavaScript -->
+                            </select>
+                             <small class="form-text text-muted" data-i18n="data_decision.knowledge_graph_help">选择一个知识图谱以允许 Agent 查询。</small>
+                        </div>
+                        <!-- New Max Iterations Input -->
+                        <div class="mb-3">
+                             <label for="max-iterations" class="form-label" data-i18n="data_decision.max_iterations">最大迭代次数 (可选)</label>
+                             <input type="number" class="form-control" id="max-iterations" value="20" min="1" max="100" data-i18n-placeholder="data_decision.max_iterations_placeholder" placeholder="默认 20">
+                             <small class="form-text text-muted" data-i18n="data_decision.max_iterations_help">Agent 的最大思考/行动循环次数。</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100" data-i18n="data_decision.create_task">创建任务</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Task List Card -->
+            <div class="card">
+                <div class="card-header">
+                     <h5 class="mb-0" data-i18n="data_decision.task_list">任务列表</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="task-list-container" class="list-group list-group-flush">
+                        <!-- Task items will be populated by JavaScript -->
+                        <div class="list-group-item text-center" id="task-list-loading">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <span data-i18n="data_decision.loading">加载中...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Task Details and Execution -->
+        <div class="col-lg-8">
+            <div class="card sticky-top" style="top: 1rem;">
+                 <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0" id="task-detail-title" data-i18n="data_decision.task_details">任务详情</h5>
+                    <div>
+                         <button class="btn btn-danger btn-sm me-2 text-white" id="stop-task-btn" style="display: none;" disabled>
+                              <i class="fas fa-stop me-1"></i><span data-i18n="data_decision.stop">终止</span>
+                         </button>
+                         <button class="btn btn-success btn-sm text-white" id="run-task-btn" disabled>
+                              <i class="fas fa-play me-1"></i><span data-i18n="data_decision.run_task">运行任务</span>
+                         </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="task-detail-content">
+                        <p class="text-muted text-center" id="task-select-prompt" data-i18n="data_decision.select_task_prompt">请从左侧列表选择一个任务以查看详情。</p>
+
+                        <!-- Task Info Section (Hidden initially) -->
+                        <div id="task-info" style="display: none;">
+                            <h6 data-i18n="data_decision.task_goal_label">任务目标:</h6>
+                            <p id="task-info-goal" class="mb-2"></p>
+                            <p class="mb-1">
+                                <small><strong data-i18n="data_decision.status">状态:</strong> <span id="task-info-status" class="badge"></span></small> |
+                                <small><strong data-i18n="data_decision.database_table">数据库表:</strong> <span id="task-info-sql"></span></small> |
+                                <small><strong data-i18n="data_decision.knowledge_graph_label">知识图谱:</strong> <span id="task-info-kg"></span></small>
+                            </p>
+                             <hr>
+                        </div>
+
+                         <!-- Task Steps/Messages Section -->
+                        <div id="task-steps-container">
+                            <!-- Steps will be populated here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer text-muted" id="task-status-footer" style="display: none;">
+                    <span data-i18n="data_decision.current_status">当前状态:</span> <span id="current-task-status"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block additional_scripts %}
+<script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vendor/prism.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vendor/prism-autoloader.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vendor/moment.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vendor/moment-zh-cn.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/data_decision.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}WisdominDATA{% endblock %}</title>
+    <!-- 使用本地Bootstrap CSS代替CDN -->
+    <link href="{{ url_for('static', filename='css/vendor/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Font Awesome CSS 由 webpack 注入，无需在此链接 -->
+    <!-- <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/all.min.css') }}"> -->
+    {% block additional_styles %}{% endblock %}
+</head>
+<body>
+    <script>
+        // Immediately apply sidebar state class to body to prevent FOUC
+        (function() {
+            try {
+                if (localStorage.getItem('sidebarCollapsed') === 'true') {
+                    document.body.classList.add('body-sidebar-collapsed');
+                }
+            } catch (e) {
+                console.error('Could not access localStorage for sidebar state:', e);
+            }
+        })();
+    </script>
+    <!-- 侧边栏导航 -->
+    <div class="sidebar" id="sidebar">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="WisdominDATA Logo" class="logo-img">
+            <div class="logo-text-container">
+                <span class="logo-text-zh">智数</span>
+                <span class="logo-text-en">Wisdom in DATA</span>
+            </div>
+            <button class="btn btn-light" id="sidebar-toggle"><i class="fas fa-bars"></i></button>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item">
+                <a href="{{ url_for('main.index') }}" class="nav-link">
+                    <i class="fas fa-home"></i>
+                    <span class="nav-text" data-i18n="nav.home">首页</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('data_import.data_import') }}" class="nav-link">
+                    <i class="fas fa-file-import"></i>
+                    <span class="nav-text" data-i18n="nav.data_import">数据导入</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('database.database_management') }}" class="nav-link">
+                    <i class="fas fa-database"></i>
+                    <span class="nav-text" data-i18n="nav.database_management">数据库管理</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('qa.database_qa') }}" class="nav-link">
+                    <i class="fas fa-question-circle"></i>
+                    <span class="nav-text" data-i18n="nav.database_qa">数据库问答</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('kg.knowledge_graph_construction') }}" class="nav-link">
+                    <i class="fas fa-project-diagram"></i>
+                    <span class="nav-text" data-i18n="nav.knowledge_graph_construction">知识图谱构建</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('kg.knowledge_graph_visualization') }}" class="nav-link">
+                    <i class="fas fa-share-nodes"></i>
+                    <span class="nav-text" data-i18n="nav.knowledge_graph_visualization">知识图谱可视化</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('kgqa.knowledge_graph_qa') }}" class="nav-link">
+                    <i class="fas fa-robot"></i>
+                    <span class="nav-text" data-i18n="nav.knowledge_graph_qa">知识图谱问答</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('kg.knowledge_graph_metrics') }}" class="nav-link">
+                    <i class="fas fa-calculator"></i>
+                    <span class="nav-text" data-i18n="nav.knowledge_graph_metrics">知识图谱指标</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('qa.data_decision') }}" class="nav-link">
+                    <i class="fas fa-brain"></i>
+                    <span class="nav-text" data-i18n="nav.data_decision">数据决策</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('settings.settings') }}" class="nav-link">
+                    <i class="fas fa-cog"></i>
+                    <span class="nav-text" data-i18n="nav.settings">系统设置</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <!-- 主内容区域 -->
+    <div class="main-content" id="main-content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- JavaScript -->
+    <!-- 使用本地jQuery代替CDN -->
+    <script src="{{ url_for('static', filename='js/vendor/jquery.min.js') }}"></script>
+    <!-- 使用本地Bootstrap Bundle代替CDN -->
+    <script src="{{ url_for('static', filename='js/vendor/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <!-- 国际化核心支持 -->
+    <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/i18n-helper.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/lang/zh-CN.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/lang/en-US.js') }}"></script>
+    
+    <script>
+        // 全局国际化初始化
+        $(document).ready(function() {
+            // 从后端获取语言设置并初始化
+            initializeGlobalI18n();
+            
+            // 监听语言切换事件，更新页面标题
+            if (window.i18n) {
+                window.i18n.on('languageChanged', function(data) {
+                    updatePageTitle(data.language);
+                });
+            }
+        });
+        
+        function initializeGlobalI18n() {
+            // 获取保存的语言设置
+            $.ajax({
+                url: '/api/get-language-setting',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        const language = response.language || 'zh-CN';
+                        window.i18n.setLanguage(language);
+                        updatePageTitle(language);
+                    } else {
+                        // 使用默认语言
+                        window.i18n.setLanguage('zh-CN');
+                        updatePageTitle('zh-CN');
+                    }
+                },
+                error: function() {
+                    // 网络错误时使用localStorage中的设置或默认语言
+                    const savedLang = localStorage.getItem('wisdomindata_language') || 'zh-CN';
+                    window.i18n.setLanguage(savedLang);
+                    updatePageTitle(savedLang);
+                }
+            });
+        }
+        
+        function updatePageTitle(language) {
+            // 根据当前页面路径更新标题
+            const path = window.location.pathname;
+            let titleKey = 'page_title.home';
+            
+            if (path.includes('data_import')) {
+                titleKey = 'page_title.data_import';
+            } else if (path.includes('database_management')) {
+                titleKey = 'page_title.database_management';
+            } else if (path.includes('database_qa')) {
+                titleKey = 'page_title.database_qa';
+            } else if (path.includes('knowledge_graph_construction')) {
+                titleKey = 'page_title.knowledge_graph_construction';
+            } else if (path.includes('knowledge_graph_visualization')) {
+                titleKey = 'page_title.knowledge_graph_visualization';
+            } else if (path.includes('knowledge_graph_qa')) {
+                titleKey = 'page_title.knowledge_graph_qa';
+            } else if (path.includes('knowledge_graph_metrics')) {
+                titleKey = 'page_title.knowledge_graph_metrics';
+            } else if (path.includes('data_decision')) {
+                titleKey = 'page_title.data_decision';
+            } else if (path.includes('settings')) {
+                titleKey = 'settings.title';
+                document.title = `WisdominDATA - ${window.i18n.t(titleKey)}`;
+                return;
+            }
+            
+            const translatedTitle = window.i18n.t(titleKey);
+            if (translatedTitle && translatedTitle !== titleKey) {
+                document.title = translatedTitle;
+            }
+        }
+    </script>
+    
+    {% block additional_scripts %}{% endblock %}
+</body>
+</html> 

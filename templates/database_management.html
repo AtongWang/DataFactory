@@ -1,0 +1,931 @@
+{% extends "layout.html" %}
+
+{% block title %}WisdominDATA - 数据库管理{% endblock %}
+
+{% block additional_styles %}
+<style>
+    .sql-console {
+        background-color: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .sql-input {
+        width: 100%;
+        height: 80px;
+        font-family: monospace;
+        resize: vertical;
+        margin-bottom: 10px;
+    }
+    
+    .table-list {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    
+    .table-list-item {
+        padding: 8px 15px;
+        border-bottom: 1px solid #eee;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .table-list-item:hover {
+        background-color: #f5f5f5;
+    }
+    
+    .db-info-card {
+        margin-bottom: 20px;
+    }
+    
+    .result-table {
+        width: 100%;
+        overflow-x: auto;
+    }
+    
+    .result-table table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .result-table th, .result-table td {
+        padding: 8px;
+        text-align: left;
+        border: 1px solid #ddd;
+    }
+    
+    .result-table th {
+        background-color: #f2f2f2;
+    }
+    
+    .result-table tr:nth-child(even) {
+        background-color: #f8f8f8;
+    }
+    
+    .description-input {
+        width: 100%;
+        border: 1px solid #ced4da;
+        padding: .375rem .75rem;
+        border-radius: .25rem;
+    }
+    .unique-values-area {
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #f1f1f1;
+        border-radius: 4px;
+        max-height: 150px;
+        overflow-y: auto;
+        font-size: 0.9em;
+    }
+    .nav-tabs .nav-link.active {
+        background-color: #fff;
+        border-color: #dee2e6 #dee2e6 #fff;
+    }
+    .tab-content {
+        border: 1px solid #dee2e6;
+        border-top: none;
+        padding: 15px;
+        border-radius: 0 0 .25rem .25rem;
+    }
+    .schema-details span {
+        margin-right: 5px;
+        padding: 2px 4px;
+        font-size: 0.8em;
+        border-radius: 3px;
+        background-color: #e9ecef;
+        color: #495057;
+        border: 1px solid #ced4da;
+    }
+    .schema-details .pk {
+        background-color: #ffc107; /* Yellow for PK */
+        border-color: #e0a800;
+        color: #343a40;
+        font-weight: bold;
+    }
+    .schema-details .unique {
+        background-color: #17a2b8; /* Info blue for Unique */
+        border-color: #138496;
+        color: white;
+    }
+    .ai-suggest-btn {
+        margin-left: 5px;
+    }
+    .loading-indicator {
+        font-style: italic;
+        color: #6c757d;
+    }
+    #describe-table-btn {
+        margin-left: 15px;
+    }
+    .modal-lg {
+        max-width: 80%; /* Wider modal for schema table */
+    }
+    #modal-generate-all-btn, #modal-add-ddl-btn, #modal-expand-all-unique-btn {
+        margin-left: 5px; /* Add some spacing between footer buttons */
+    }
+
+    /* 强制设置参考数据删除按钮为红色 */
+    .delete-training-item-btn {
+        background-color: #dc3545 !important; /* 使用 Bootstrap 的危险红色 */
+        border-color: #dc3545 !important;
+        color: white !important; /* 确保文字和图标是白色 */
+    }
+
+    .delete-training-item-btn:hover {
+        background-color: #c82333 !important; /* 悬停时加深红色 */
+        border-color: #bd2130 !important;
+        color: white !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title" data-i18n="database_management.title">数据库管理</h1>
+
+<!-- 数据库信息卡片 -->
+<div class="card db-info-card">
+    <h2 class="card-title" data-i18n="database_management.database_status">数据库状态</h2>
+    <div class="row">
+        <div class="col-md-6">
+            <p><strong data-i18n="database_management.database_name">数据库名称:</strong> <span id="db-name">--</span></p>
+            <p><strong data-i18n="database_management.database_type">数据库类型:</strong> <span id="db-type">--</span></p>
+            <p><strong data-i18n="database_management.connection_status">连接状态:</strong> <span id="db-status">--</span></p>
+        </div>
+        <div class="col-md-6">
+            <p><strong data-i18n="database_management.table_count">表格数量:</strong> <span id="table-count">--</span></p>
+            <p><strong data-i18n="database_management.database_size">数据库大小:</strong> <span id="db-size">--</span></p>
+            <p><strong data-i18n="database_management.last_update">最后更新:</strong> <span id="last-update">--</span></p>
+        </div>
+    </div>
+    <div class="mt-3">
+        <button id="refresh-db-btn" class="btn btn-secondary" data-i18n="database_management.refresh_info">刷新信息</button>
+        <button id="delete-table-btn" class="btn btn-danger delete-training-item-btn" data-i18n="database_management.delete_table">删除表</button>
+    </div>
+</div>
+
+<!-- 表格列表和数据预览区域 -->
+<div class="row">
+    <!-- 左侧表格列表 -->
+    <div class="col-md-3">
+        <div class="card">
+            <h2 class="card-title" data-i18n="database_management.table_list">表格列表</h2>
+            <div class="table-list" id="table-list">
+                <p class="text-center" data-i18n="database_management.loading_tables">加载中...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 右侧数据预览 -->
+    <div class="col-md-9">
+        <div class="card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                 <h2 class="card-title mb-0"><span data-i18n="database_management.data_preview">数据预览:</span> <span id="current-table-title">--</span></h2>
+                 <button id="describe-table-btn" class="btn btn-info btn-sm" disabled>
+                     <i class="fas fa-edit"></i> <span data-i18n="database_management.describe_table">描绘表结构 (DDL)</span>
+                 </button>
+            </div>
+            
+            <!-- SQL命令行控制台 -->
+            <div class="sql-console">
+                <textarea id="sql-input" class="sql-input" data-i18n-placeholder="database_management.sql_placeholder" placeholder="输入SQL查询语句..."></textarea>
+                <button id="execute-sql-btn" class="btn btn-primary" data-i18n="database_management.execute">执行</button>
+                <button id="clear-sql-btn" class="btn btn-secondary" data-i18n="database_management.clear">清除</button>
+            </div>
+            
+            <!-- 查询结果显示区域 -->
+            <div class="result-table" id="result-container">
+                <p class="text-center" data-i18n="database_management.select_table_or_execute">请选择表格或执行SQL查询</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 删除表确认对话框 -->
+<div class="modal fade" id="delete-table-modal" tabindex="-1" role="dialog" aria-labelledby="deleteTableModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteTableModalLabel" data-i18n="database_management.delete_table">删除表</h5>
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="table-to-delete" class="form-label" data-i18n="database_management.select_table_to_delete">选择要删除的表</label>
+                    <select id="table-to-delete" class="form-control">
+                        <option value="" data-i18n="database_management.select_table_option">-- 选择表 --</option>
+                    </select>
+                </div>
+                <div class="alert alert-danger">
+                    <span data-i18n="database_management.warning_delete_permanent">警告: 删除表将永久移除所有数据，此操作无法撤销！</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">取消</button>
+                <button type="button" class="btn btn-danger delete-training-item-btn" id="confirm-delete-btn" data-i18n="database_management.confirm_delete_operation">删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 表结构描绘 Modal - NEW -->
+<div class="modal fade" id="description-modal" tabindex="-1" role="dialog" aria-labelledby="descriptionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document"> {# Use modal-lg for wider content #}
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="descriptionModalLabel"><span data-i18n="database_management.table_structure_description">表结构描绘</span>: <span id="modal-table-name">--</span></h5>
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                 <p data-i18n="database_management.define_ddl_description" data-i18n-options='{"table": "<strong><span id=\"modal-table-name-body\">--</span></strong>"}'>为表 <strong><span id="modal-table-name-body">--</span></strong> 定义 DDL 描述信息并添加到训练数据。</p>
+                 <div id="modal-schema-container" style="margin-bottom: 15px;">
+                     <p class="text-center" data-i18n="common.loading">加载中...</p>
+                     <!-- Schema table will be inserted here by JS -->
+                 </div>
+                 <div id="modal-ddl-status-message" class="mt-2"></div>
+            </div>
+            <div class="modal-footer">
+                 <div class="me-auto"> {# Align input to the left #}
+                     <label for="modal-unique-values-limit" class="col-form-label col-form-label-sm" data-i18n="database_management.unique_values_count">唯一值数量:</label>
+                     <input type="number" id="modal-unique-values-limit" class="form-control form-control-sm d-inline-block" style="width: 70px;" value="10" min="1" max="50">
+                 </div>
+                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="database_management.close">关闭</button>
+                 <button type="button" class="btn btn-secondary" id="modal-expand-all-unique-btn" disabled data-i18n-title="js.expand_all_unique_tooltip">
+                     <i class="fas fa-angle-double-down"></i> <span data-i18n="database_management.expand_all_values">展开所有值</span>
+                 </button>
+                 <button type="button" class="btn btn-primary" id="modal-generate-all-btn" disabled>
+                    <i class="fas fa-brain"></i> <span data-i18n="database_management.ai_generate_description">AI 一键生成描述</span>
+                 </button>
+                 <button type="button" class="btn btn-primary" id="modal-add-ddl-btn" disabled>
+                    <i class="fas fa-plus"></i> <span data-i18n="database_management.generate_and_add_ddl">生成并添加 DDL</span>
+                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/font-awesome.min.css') }}" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+{% endblock %}
+
+{% block additional_scripts %}
+<script>
+    $(document).ready(function() {
+        let currentSelectedTable = null;
+        let currentSchemaData = [];
+        let schemaLoadedForTable = null;
+
+        // --- Helper Functions ---
+        function showModalLoadingState() {
+            $('#modal-table-name').text(currentSelectedTable || '--');
+            $('#modal-table-name-body').text(currentSelectedTable || '--');
+            $('#modal-schema-container').html('<p class="text-center"><i class="fas fa-spinner fa-spin"></i> ' + i18nHelper.t('js.loading_schema') + '</p>');
+            $('#modal-add-ddl-btn').prop('disabled', true);
+            $('#modal-generate-all-btn').prop('disabled', true);
+            $('#modal-expand-all-unique-btn').prop('disabled', true); // Disable new button
+            $('#modal-ddl-status-message').html('');
+        }
+
+        // --- Core Loading Functions ---
+        function loadDatabaseInfo() {
+            $.ajax({
+                url: '/api/database-info',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        $('#db-name').text(response.data.database_name || '--');
+                        $('#db-type').text(response.data.database_type || '--');
+                        $('#db-status').text(response.data.status || '--');
+                        $('#table-count').text(response.data.table_count || '--');
+                        $('#db-size').text(response.data.size || '--');
+                        $('#last-update').text(response.data.last_update || '--');
+                    } else {
+                        i18nHelper.showTranslatedAlert('js.get_database_info_failed');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert(i18nHelper.t('database_management.network_error'));
+                }
+            });
+        }
+        
+        function loadTableList() {
+            $.ajax({
+                url: '/api/tables',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        let html = '';
+                        if (response.data.length > 0) {
+                            response.data.forEach(function(table) {
+                                html += `<div class="table-list-item" data-table="${table.name}">${table.name}</div>`;
+                            });
+                        } else {
+                            html = `<p class="text-center">${i18nHelper.t('database_management.no_tables_found')}</p>`;
+                        }
+                        $('#table-list').html(html);
+                        
+                        // --- Table Click Logic (MODAL update) ---
+                        $('.table-list-item').off('click').on('click', function() {
+                            const tableName = $(this).data('table');
+                            console.log(`Table selected: ${tableName}`);
+
+                            // Only reload preview if table changed
+                            if (currentSelectedTable !== tableName) {
+                                currentSelectedTable = tableName;
+                                schemaLoadedForTable = null; // Reset schema loaded flag
+                                currentSchemaData = [];
+
+                                $('#current-table-title').text(tableName);
+                                $('#result-container').html(`<p class="text-center">${i18nHelper.t('database_management.loading_preview_data')}</p>`);
+                            loadTableData(tableName);
+
+                                $('#describe-table-btn').prop('disabled', false); // Enable describe button
+                            } else {
+                                 console.log("Same table clicked, preview already loaded.");
+                            }
+                        });
+                    } else {
+                        $('#table-list').html(`<p class="text-center">${i18nHelper.t('database_management.loading_failed')}</p>`);
+                        alert(i18nHelper.t('database_management.get_table_list_failed') + ': ' + response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#table-list').html(`<p class="text-center">${i18nHelper.t('database_management.loading_failed')}</p>`);
+                    alert(i18nHelper.t('database_management.network_error'));
+                }
+            });
+        }
+        
+        function loadTableData(tableName) {
+            console.log(`Loading preview data for: ${tableName}`);
+            $.ajax({
+                url: `/api/table-data/${tableName}?limit=50`,
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        displayTableData(response.data);
+                    } else {
+                        $('#result-container').html(`<p class="text-center text-danger">${i18nHelper.t('database_management.loading_preview_failed')}: ${response.message}</p>`);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#result-container').html(`<p class="text-center text-danger">${i18nHelper.t('database_management.loading_preview_request_failed')}</p>`);
+                    console.error("Error loading table data:", error);
+                }
+            });
+        }
+        
+        // Load Table Schema into MODAL
+        function loadTableSchema(tableName) {
+            if (!tableName) return;
+            console.log(`Attempting to load schema for: '${tableName}'`); // Add log
+            showModalLoadingState(); // Use helper to set initial state
+            currentSchemaData = [];
+
+            $.ajax({
+                url: `/api/table-schema/${tableName}`,
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        currentSchemaData = response.data;
+                        schemaLoadedForTable = tableName;
+                        displaySchemaTable(tableName, currentSchemaData);
+                        // Enable all action buttons once schema is loaded
+                        $('#modal-add-ddl-btn').prop('disabled', false);
+                        $('#modal-generate-all-btn').prop('disabled', false);
+                        $('#modal-expand-all-unique-btn').prop('disabled', false); // Enable new button
+                    } else {
+                        $('#modal-schema-container').html(`<p class="text-center text-danger">${i18nHelper.t('database_management.loading_schema_failed')}: ${response.message}</p>`);
+                        schemaLoadedForTable = null;
+                         $('#modal-generate-all-btn').prop('disabled', true);
+                         $('#modal-expand-all-unique-btn').prop('disabled', true); // Disable new button on error
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#modal-schema-container').html(`<p class="text-center text-danger">${i18nHelper.t('database_management.loading_schema_request_failed')}</p>`);
+                    schemaLoadedForTable = null;
+                    $('#modal-generate-all-btn').prop('disabled', true);
+                    $('#modal-expand-all-unique-btn').prop('disabled', true); // Disable new button on error
+                    console.error("Error loading table schema for modal:", error);
+                }
+            });
+        }
+        
+        // --- Display Functions ---
+        function displayTableData(data) {
+            if (!data || !data.columns || !data.rows || data.rows.length === 0) {
+                $('#result-container').html(`<p class="text-center">${i18nHelper.t('database_management.no_data_or_no_results')}</p>`);
+                return;
+            }
+            
+            let html = '<table class="table table-striped table-sm">';
+            html += '<thead><tr>';
+            data.columns.forEach(function(column) {
+                html += `<th>${column}</th>`;
+            });
+            html += '</tr></thead>';
+            html += '<tbody>';
+            data.rows.forEach(function(row) {
+                html += '<tr>';
+                data.columns.forEach(function(column) {
+                    const cellValue = row[column] !== null && row[column] !== undefined ? String(row[column]).replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
+                    html += `<td>${cellValue}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+             if(data.rows.length >= 50) {
+                 html += `<p class="text-muted small">${i18nHelper.t('database_management.result_limited_to_50_rows')}</p>`;
+             }
+            $('#result-container').html(html);
+        }
+        
+        // Display Schema Table inside MODAL
+        function displaySchemaTable(tableName, schemaData) {
+            console.log(`Displaying schema table in modal for: ${tableName}`);
+             const container = $('#modal-schema-container'); // Target modal container
+             container.empty(); // Clear previous content/loading state
+
+             if (!schemaData || schemaData.length === 0) {
+                 container.html(`<p class="text-center">${i18nHelper.t('database_management.no_schema_info')}</p>`);
+                 $('#modal-add-ddl-btn').prop('disabled', true);
+                 $('#modal-generate-all-btn').prop('disabled', true);
+                 $('#modal-expand-all-unique-btn').prop('disabled', true); // Disable new button if no schema
+                 return;
+             }
+
+            let tableHtml = `
+                <table class="table table-bordered table-sm" id="modal-schema-table"> {# Note the ID change #}
+                    <thead>
+                        <tr>
+                            <th data-i18n="database_management.column_and_constraints">列名 & 约束</th>
+                            <th data-i18n="database_management.data_type">数据类型</th>
+                            <th data-i18n="database_management.description_editable">描述 (可编辑)</th>
+                            <th data-i18n="database_management.operations">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            schemaData.forEach(function(col, index) {
+                tableHtml += `
+                    <tr data-column-name="${col.name}"\
+                        data-column-type="${col.type}"\
+                        data-is-nullable="${col.is_nullable}"\
+                        data-is-pk="${col.is_primary_key}"\
+                        data-is-unique="${col.is_unique}"\
+                        data-default-value="${col.default_value !== null && col.default_value !== undefined ? col.default_value : ''}">
+                        <td>\
+                            <strong>${col.name}</strong>\
+                            <div class="schema-details">\
+                                ${col.is_primary_key ? '<span class="pk" title="Primary Key">PK</span>' : ''}
+                                ${!col.is_primary_key && col.is_unique ? '<span class="unique" title="Unique">Unique</span>' : ''} 
+                                ${!col.is_nullable ? '<span title="Not Nullable">Not Null</span>' : ''}
+                                ${(col.default_value !== null && col.default_value !== undefined) ? '<span title="Default Value">Default: `' + col.default_value + '`</span>' : ''}
+                            </div>\
+                        </td>\
+                        <td>${col.type}</td>\
+                        <td>\
+                            <div class="input-group input-group-sm">\
+                                <input type="text" class="form-control form-control-sm description-input" id="modal-desc-input-${index}" value="${col.description || ''}" data-i18n-placeholder="js.add_edit_description_placeholder" placeholder="添加/编辑描述..."> {# ID prefix change #}\
+                                <div class="input-group-append">\
+                                    <button class="btn btn-outline-info ai-suggest-btn" type="button" data-column="${col.name}" data-index="${index}" data-i18n-title="js.ai_suggest_tooltip" title="使用 AI 建议描述">\
+                                        <i class="fas fa-wand-magic-sparkles"></i> AI\
+                                    </button>\
+                                </div>\
+                            </div>\
+                            <div class="loading-indicator" id="modal-desc-loading-${index}" style="display: none; font-size: 0.8em;" data-i18n="js.ai_thinking">AI 正在思考...</div> {# ID prefix change #}\
+                        </td>\
+                        <td>\
+                            <button class="btn btn-outline-secondary btn-sm get-unique-btn" data-column="${col.name}" data-index="${index}" data-i18n-title="js.get_unique_values_tooltip" title="获取唯一值示例">\
+                                Values\
+                            </button>\
+                            <div class="unique-values-area" id="modal-unique-values-${index}" style="display: none;"></div> {# ID prefix change #}\
+                        </td>\
+                    </tr>
+                `;
+            });
+            tableHtml += '</tbody></table>';
+            container.html(tableHtml);
+
+            // --- Bind events WITHIN the modal context ---
+            // Need to bind events *after* the table is added to the DOM
+            container.find('.get-unique-btn').off('click').on('click', function() {
+                const button = $(this);
+                const columnName = button.data('column');
+                const rowIndex = button.data('index');
+                const uniqueArea = $(`#modal-unique-values-${rowIndex}`);
+                const limitInput = $('#modal-unique-values-limit'); // Get the limit input
+                let limit = parseInt(limitInput.val(), 10) || 10; // Read value, default to 10
+                if (limit < 1) limit = 1; // Ensure minimum limit
+                if (limit > 50) limit = 50; // Ensure maximum limit (optional, based on API/performance)
+                limitInput.val(limit); // Update input field in case it was adjusted
+
+                 if (uniqueArea.is(':visible')) {
+                     uniqueArea.slideUp().empty();
+                     return;
+                 }
+                uniqueArea.html('<i class="fas fa-spinner fa-spin"></i> ' + i18nHelper.t('js.loading_unique_values')).slideDown();
+                $.ajax({
+                    // Use the limit value in the API call
+                    url: `/api/column-unique-values/${currentSelectedTable}/${columnName}?limit=${limit}`,
+                    method: 'GET',
+                    success: function(response) {
+                         if (response.status === 'success' && response.data.length > 0) {
+                            let uniqueHtml = `<strong>${i18nHelper.t('js.unique_value_examples', {count: response.data.length})}:</strong><ul class="list-unstyled small">`; // Show count
+                            response.data.forEach(val => {
+                                uniqueHtml += `<li><small>${val !== null ? String(val).substring(0, 50) : 'NULL'}</small></li>`;
+                            });
+                            uniqueHtml += '</ul>';
+                             if (response.data.length === limit) { // Indicate if limit was reached
+                                 uniqueHtml += `<em class="small">${i18nHelper.t('js.limit_reached', {limit: limit})}</em>`;
+                             }
+                            uniqueArea.html(uniqueHtml);
+                        } else if (response.status === 'success') {
+                             uniqueArea.html('<em class="small">' + i18nHelper.t('js.no_unique_values') + '</em>');
+                        }
+                        else {
+                            uniqueArea.html(`<span class="text-danger small">${i18nHelper.t('js.get_unique_values_failed')}: ${response.message}</span>`);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                         uniqueArea.html('<span class="text-danger small">' + i18nHelper.t('js.request_failed') + '</span>');
+                         console.error("Error getting unique values:", error);
+                    }
+                });
+            });
+
+            container.find('.ai-suggest-btn').off('click').on('click', function() {
+                const button = $(this);
+                const columnName = button.data('column');
+                const index = button.data('index');
+                const inputField = $(`#modal-desc-input-${index}`);
+                const loadingIndicator = $(`#modal-desc-loading-${index}`);
+                // ... (rest of AI suggest logic is the same, just uses modal IDs) ...
+                button.prop('disabled', true);
+                loadingIndicator.show();
+                inputField.prop('disabled', true);
+                $.ajax({
+                    url: '/api/generate-column-description',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ table_name: currentSelectedTable, column_name: columnName }),
+                    success: function(response) {
+                         if (response.status === 'success' && response.description) {
+                            inputField.val(response.description);
+                            inputField.trigger('change');
+                        } else {
+                            i18nHelper.showTranslatedAlert('js.ai_suggestion_failed', ': ' + (response.message || '未知错误'));
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                         i18nHelper.showTranslatedAlert('js.ai_request_failed', ': ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : '检查网络或服务器日志'));
+                         console.error("AI Suggest Error:", error, xhr.responseText);
+                    },
+                    complete: function() {
+                        button.prop('disabled', false);
+                        loadingIndicator.hide();
+                        inputField.prop('disabled', false);
+                    }
+                });
+            });
+
+            // Make sure buttons are initially enabled after rendering
+            $('#modal-add-ddl-btn').prop('disabled', !(schemaData && schemaData.length > 0));
+            $('#modal-generate-all-btn').prop('disabled', !(schemaData && schemaData.length > 0));
+            $('#modal-expand-all-unique-btn').prop('disabled', !(schemaData && schemaData.length > 0)); // Set initial state based on schema
+        }
+
+        // --- Other Functions ---
+        function executeSQLQuery(sqlQuery) {
+            $.ajax({
+                url: '/api/execute-sql',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ sql: sqlQuery }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                         if (response.data && response.data.columns && response.data.rows) {
+                             displayTableData(response.data);
+                         } else if(response.data && response.data.rows && response.data.rows[0] && response.data.rows[0].affected_rows !== undefined) {
+                              $('#result-container').html(`<div class="alert alert-success">${i18nHelper.t('database_management.operation_success_affected_rows', {count: response.data.rows[0].affected_rows})}</div>`);
+                         } else {
+                              $('#result-container').html(`<div class="alert alert-info">${i18nHelper.t('database_management.operation_executed_no_result')}</div>`);
+                         }
+                    } else {
+                        $('#result-container').html(`<div class="alert alert-danger">${i18nHelper.t('database_management.sql_execution_error')}: ${response.message}</div>`);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#result-container').html(`<div class="alert alert-danger">${i18nHelper.t('database_management.request_failed_check_network')}</div>`);
+                }
+            });
+        }
+
+        function populateTableDropdown() {
+            $.ajax({
+                url: '/api/tables',
+                method: 'GET',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        let html = `<option value="">${i18nHelper.t('database_management.select_table_option')}</option>`;
+                        if (response.data.length > 0) {
+                            response.data.forEach(function(table) {
+                                html += `<option value="${table.name}">${table.name}</option>`;
+                            });
+                        }
+                        $('#table-to-delete').html(html);
+                    } else {
+                        alert(i18nHelper.t('database_management.get_table_list_failed') + ': ' + response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert(i18nHelper.t('database_management.network_error'));
+                }
+            });
+        }
+        
+        function deleteTable(tableName) {
+            $.ajax({
+                url: '/api/delete-table',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ table_name: tableName }),
+                success: function(response) {
+                    $('#delete-table-modal').modal('hide');
+                    
+                    if (response.status === 'success') {
+                        alert(i18nHelper.t('database_management.table_deleted_successfully', {tableName: tableName}));
+                        loadDatabaseInfo();
+                        loadTableList();
+                        if (currentSelectedTable === tableName) {
+                            $('#current-table-title').text('--');
+                            $('#result-container').html(`<p class="text-center">${i18nHelper.t('database_management.select_table_or_execute')}</p>`);
+                            $('#describe-table-btn').prop('disabled', true); // Disable describe button
+                            currentSelectedTable = null;
+                            currentSchemaData = [];
+                            schemaLoadedForTable = null;
+                        }
+                    } else {
+                        alert(i18nHelper.t('database_management.delete_table_failed') + ': ' + response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#delete-table-modal').modal('hide');
+                    alert(i18nHelper.t('database_management.network_error'));
+                }
+            });
+        }
+
+        // --- Button Click Handlers ---
+
+        // DDL Generation Logic (MODAL context)
+        $('#modal-add-ddl-btn').click(function() {
+            if (!currentSelectedTable || currentSchemaData.length === 0) {
+                i18nHelper.showTranslatedAlert('js.schema_data_not_loaded');
+                return;
+            }
+            const button = $(this);
+            button.prop('disabled', true).text(i18nHelper.t('js.generating_and_submitting'));
+            $('#modal-ddl-status-message').html('<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> ' + i18nHelper.t('js.generating_ddl') + '</div>');
+
+            let primaryKeys = [];
+            let columnDefs = [];
+            currentSchemaData.forEach(function(col, index) {
+                 // Read data from the attributes of the row in the modal table
+                const row = $(`#modal-schema-table tbody tr:eq(${index})`); // Find the correct row
+                const colName = row.data('column-name');
+                const colType = row.data('column-type');
+                const isNullable = String(row.data('is-nullable')) === 'false'; // Convert back to boolean
+                const isPk = String(row.data('is-pk')) === 'true';
+                const isUnique = String(row.data('is-unique')) === 'true';
+                const defaultValue = row.data('default-value');
+                const colDesc = $(`#modal-desc-input-${index}`).val().trim(); // Get description from modal input
+
+                let columnLine = '    `' + colName + '` ' + colType;
+                if (!isNullable) columnLine += ' NOT NULL';
+                if (defaultValue !== null && defaultValue !== undefined && defaultValue !== '') {
+                     if (typeof defaultValue === 'string' && !defaultValue.match(/^\d+(\.\d+)?$/) && !defaultValue.toUpperCase().includes('CURRENT_TIMESTAMP')) { // Avoid quoting numbers and functions like CURRENT_TIMESTAMP
+                         columnLine += ` DEFAULT '${defaultValue.replace(/'/g, "''")}'`;
+                     } else {
+                         columnLine += ` DEFAULT ${defaultValue}`;
+                     }
+                 }
+                 if (isPk) primaryKeys.push('`' + colName + '`');
+                 if (isUnique && !isPk) columnLine += ' UNIQUE';
+                 if (colDesc) columnLine += ' -- ' + colDesc.replace(/(\r\n|\n|\r)/gm, " ");
+                 columnDefs.push(columnLine);
+            });
+            if (primaryKeys.length > 0) {
+                columnDefs.push('    PRIMARY KEY (' + primaryKeys.join(', ') + ')');
+            }
+            let ddlMarkdown = '```sql\nCREATE TABLE `' + currentSelectedTable + '` (\n' + columnDefs.join(',\n') + '\n);\n```\n';
+
+            // --- ADD unique values info --- START
+            let samplesMarkdown = '\n\n### ' + i18nHelper.t('database_management.column_sample_values') + ':\n';
+            let samplesFound = false;
+            console.log("Starting sample check..."); // DEBUG
+            $('#modal-schema-table tbody tr').each(function(index) {
+                const rowElement = $(this);
+                const colName = rowElement.data('column-name');
+                const uniqueArea = $(`#modal-unique-values-${index}`);
+                const sampleLis = uniqueArea.find('ul li');
+                const lisLength = sampleLis.length;
+                const hasLiTag = uniqueArea.html().includes('<li>'); // Alternative check
+
+                // DEBUG: Log info for every row
+                console.log(`Row ${index}, Col: ${colName}, Samples Found By Find: ${lisLength > 0}, Samples Found By Includes: ${hasLiTag}, Li Count: ${lisLength}, Area HTML (first 100 chars): ${uniqueArea.html().substring(0,100)}`);
+
+                // Check if the area has content using the alternative check
+                if (hasLiTag) {
+                    console.log(`  -> Appending samples for ${colName}`); // DEBUG
+                    samplesMarkdown += `\n**${colName}:**\n`;
+                    // Still use find to get the text content correctly
+                    sampleLis.each(function() {
+                        samplesMarkdown += `- ${$(this).text().trim()}\n`;
+                    });
+                    samplesFound = true;
+                }
+            });
+            console.log("Sample check finished. samplesFound:", samplesFound); // DEBUG
+
+            // Only append samples section if any were found and displayed
+            if (samplesFound) {
+                ddlMarkdown += samplesMarkdown;
+            }
+            // --- ADD unique values info --- END
+
+            console.log("Generated DDL Markdown (from modal):\n", ddlMarkdown);
+
+            $.ajax({
+                url: '/api/add-ddl-training',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ 
+                    ddl_markdown: ddlMarkdown,
+                    table_name: currentSelectedTable
+                }),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        $('#modal-ddl-status-message').html('<div class="alert alert-success">' + i18nHelper.t('js.ddl_added_successfully') + '</div>');
+                         // Optionally close modal after short delay
+                         // setTimeout(() => $('#description-modal').modal('hide'), 1500);
+                    } else {
+                        $('#modal-ddl-status-message').html(`<div class="alert alert-danger">${i18nHelper.t('js.ddl_addition_failed')}: ${response.message}</div>`);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#modal-ddl-status-message').html('<div class="alert alert-danger">' + i18nHelper.t('js.ddl_request_failed') + '</div>');
+                    console.error("Error adding DDL:", error);
+                },
+                complete: function() {
+                    button.prop('disabled', false).text(i18nHelper.t('database_management.generate_and_add_ddl'));
+                }
+            });
+        });
+
+        // Expand All Unique Values (MODAL context) - NEW
+        $('#modal-expand-all-unique-btn').click(function() {
+            const container = $('#modal-schema-container');
+            let expandedCount = 0;
+            let alreadyVisibleCount = 0;
+
+            // Iterate through each "Get Unique Values" button within the modal's schema table
+            container.find('.get-unique-btn').each(function() {
+                const uniqueButton = $(this);
+                const rowIndex = uniqueButton.data('index');
+                const uniqueArea = $(`#modal-unique-values-${rowIndex}`);
+
+                // Check if the unique values area is not currently visible and not already loading
+                if (!uniqueArea.is(':visible') && !uniqueArea.find('.fa-spinner').length) {
+                    uniqueButton.trigger('click');
+                    expandedCount++;
+                } else if (uniqueArea.is(':visible')) {
+                    alreadyVisibleCount++;
+                }
+            });
+
+            console.log(`Expand All: Triggered expansion for ${expandedCount} columns. ${alreadyVisibleCount} were already visible/loading.`);
+            // Optional: Provide feedback, maybe disable briefly
+            // $(this).prop('disabled', true);
+            // setTimeout(() => $(this).prop('disabled', false), 500);
+        });
+
+        // AI One-Click Generation Logic (MODAL context) - NEW
+        $('#modal-generate-all-btn').click(function() {
+            if (!currentSelectedTable) {
+                i18nHelper.showTranslatedAlert('js.please_select_table_first');
+                return;
+            }
+            const button = $(this);
+            const originalButtonText = button.html(); // Store original html
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> ' + i18nHelper.t('js.generating_all_descriptions'));
+            $('#modal-ddl-status-message').html('<div class="alert alert-info"><i class="fas fa-brain"></i> ' + i18nHelper.t('js.ai_generating_descriptions') + '</div>');
+
+            // Disable individual AI buttons while batch generating
+            $('#modal-schema-table .ai-suggest-btn').prop('disabled', true);
+
+            $.ajax({
+                url: `/api/generate-all-descriptions/${currentSelectedTable}`,
+                method: 'POST',
+                contentType: 'application/json',
+                // No data needed in body for this POST request
+                success: function(response) {
+                    if (response.status === 'success' && response.descriptions) {
+                        const descriptions = response.descriptions;
+                        let updatedCount = 0;
+                        // Iterate through the table rows in the modal
+                        $('#modal-schema-table tbody tr').each(function(index) {
+                            const row = $(this);
+                            const colName = row.data('column-name');
+                            if (descriptions.hasOwnProperty(colName)) {
+                                $(`#modal-desc-input-${index}`).val(descriptions[colName]);
+                                updatedCount++;
+                            }
+                        });
+                        $('#modal-ddl-status-message').html(`<div class="alert alert-success">${i18nHelper.t('js.descriptions_generated_successfully', {count: updatedCount})}</div>`);
+                    } else {
+                        $('#modal-ddl-status-message').html(`<div class="alert alert-danger">${i18nHelper.t('js.ai_batch_generation_failed')}: ${response.message || i18nHelper.t('database_management.unknown_error')}</div>`);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#modal-ddl-status-message').html('<div class="alert alert-danger">' + i18nHelper.t('js.ai_batch_request_failed') + '</div>');
+                    console.error("AI Generate All Error:", error, xhr.responseText);
+                },
+                complete: function() {
+                    button.prop('disabled', false).html(originalButtonText); // Restore original button text/icon
+                    // Re-enable individual AI buttons
+                    $('#modal-schema-table .ai-suggest-btn').prop('disabled', false);
+                }
+            });
+        });
+
+        // Modal Trigger
+        $('#describe-table-btn').click(function() {
+            if (currentSelectedTable) {
+                // Load schema into the modal and then show it
+                loadTableSchema(currentSelectedTable);
+                $('#description-modal').modal('show');
+            } else {
+                i18nHelper.showTranslatedAlert('js.please_select_table_first');
+            }
+        });
+
+         // Clear modal status when closed
+         $('#description-modal').on('hidden.bs.modal', function (e) {
+             $('#modal-ddl-status-message').html('');
+             // Optionally reset schema container if you don't want it to persist briefly
+             // $('#modal-schema-container').html('<p class="text-center">' + i18nHelper.t('database_management.loading_tables') + '</p>');
+         });
+
+        // --- Initial Page Load & Other Handlers ---
+        function initializePage() {
+            console.log("Initializing page...");
+            loadDatabaseInfo();
+            loadTableList();
+            // Reset main view
+            $('#current-table-title').text('--');
+            $('#result-container').html(`<p class="text-center">${i18nHelper.t('database_management.select_table_or_execute')}</p>`);
+            $('#describe-table-btn').prop('disabled', true);
+
+            // Reset state variables
+            currentSelectedTable = null;
+            currentSchemaData = [];
+            schemaLoadedForTable = null;
+        }
+
+        $('#refresh-db-btn').click(initializePage);
+        $('#delete-table-btn').click(function() { populateTableDropdown(); $('#delete-table-modal').modal('show'); });
+        $('#confirm-delete-btn').click(function() { 
+            const tableName = $('#table-to-delete').val();
+            if (tableName) {
+                deleteTable(tableName);
+            } else {
+                alert(i18nHelper.t('database_management.please_select_table_to_delete'));
+            }
+         });
+        $('#execute-sql-btn').click(function() { 
+            const sqlQuery = $('#sql-input').val().trim();
+            if (sqlQuery) {
+                 $('#result-container').html(`<p class="text-center"><i class="fas fa-spinner fa-spin"></i> ${i18nHelper.t('database_management.executing_query')}</p>`);
+                executeSQLQuery(sqlQuery);
+            } else {
+                alert(i18nHelper.t('database_management.please_enter_sql_query'));
+            }
+         });
+        $('#clear-sql-btn').click(function() { 
+            $('#sql-input').val('');
+            // Optionally clear results as well
+            // $('#result-container').html('<p class="text-center">' + i18nHelper.t('database_management.select_table_or_execute') + '</p>'); 
+         });
+
+        initializePage(); // Initial load
+
+    });
+</script>
+{% endblock %}

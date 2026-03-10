@@ -1,0 +1,129 @@
+/* data_decision.css */
+
+#task-list-container {
+    max-height: 400px; /* Adjust as needed */
+    overflow-y: auto;
+}
+
+#task-steps-container {
+    max-height: 60vh; /* Adjust as needed */
+    overflow-y: auto;
+    padding: 5px;
+    background-color: #f8f9fa; /* Light background for contrast */
+    border-radius: 0.25rem;
+}
+
+.task-list-item h6,
+.task-list-item p {
+    margin-bottom: 0.25rem !important;
+}
+
+/* Styling for Agent Steps */
+.agent-step-card {
+    border-width: 1px;
+    border-left-width: 4px !important; /* Use left border for type indication */
+}
+
+.agent-step-card .card-body {
+    padding: 0.5rem 0.75rem !important;
+}
+
+.agent-step-content {
+    font-size: 0.9rem;
+}
+
+.agent-step-content pre {
+    max-height: 200px;
+    overflow: auto;
+    margin-top: 0.25rem;
+    margin-bottom: 0;
+    font-size: 0.85em; /* Smaller font for code */
+    background-color: #282c34; /* Match okaidia theme */
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+}
+
+.agent-step-content code[class*="language-"] {
+    font-family: 'Courier New', Courier, monospace;
+    background: none; /* Override default prism background */
+    text-shadow: none; /* Override default prism shadow */
+    color: #f8f8f2; /* Match okaidia text color */
+}
+
+/* Specific Step Styling (using left border color) */
+.agent-step-card.border-secondary { border-left-color: #6c757d !important; } /* Goal, System */
+.agent-step-card.border-info { border-left-color: #0dcaf0 !important; }      /* Thought */
+.agent-step-card.border-warning { border-left-color: #ffc107 !important; }   /* Action, Warning */
+.agent-step-card.border-primary { border-left-color: #0d6efd !important; }   /* Observation */
+.agent-step-card.border-success { border-left-color: #198754 !important; }   /* Final Answer */
+.agent-step-card.border-danger { border-left-color: #dc3545 !important; }    /* Error */
+
+/* Ensure sticky top works */
+.sticky-top {
+    z-index: 1020; /* Ensure it's above other content */
+}
+
+/* Adjust delete button appearance */
+.delete-task-btn {
+    padding: 0.1rem 0.4rem;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.task-list-item:hover .delete-task-btn {
+    opacity: 1;
+}
+
+.text-truncate {
+     overflow: hidden;
+     text-overflow: ellipsis;
+     white-space: nowrap;
+ }
+
+/* Styles for Markdown generated content */
+.agent-step-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    font-size: 0.85em; /* Smaller font for tables */
+}
+
+.agent-step-content th,
+.agent-step-content td {
+    border: 1px solid #dee2e6; /* Bootstrap default border color */
+    padding: 0.4rem;
+    text-align: left;
+}
+
+.agent-step-content th {
+    background-color: #f8f9fa; /* Light header background */
+    font-weight: bold;
+}
+
+.agent-step-content blockquote {
+  padding: 10px 20px;
+  margin: 0 0 20px;
+  font-size: 1rem;
+  border-left: 5px solid #eee;
+  color: #6c757d;
+}
+
+.agent-step-content ul,
+.agent-step-content ol {
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+}
+
+/* 加深按钮背景色和文字对比度 */
+#stop-task-btn {
+    background-color: #dc1f3f !important; /* 更深的红色 */
+    color: white !important;
+    font-weight: 500;
+}
+
+#run-task-btn {
+    background-color: #157347 !important; /* 更深的绿色 */
+    color: white !important;
+    font-weight: 500;
+}

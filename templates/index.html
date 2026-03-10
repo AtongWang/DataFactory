@@ -1,0 +1,214 @@
+{% extends "layout.html" %}
+
+{% block title %}WisdominDATA - 连接数据，洞见智慧{% endblock %}
+
+{% block content %}
+<style>
+    body {
+        background-image: url("{{ url_for('static', filename='images/16326882_rm314-aew-25.jpg') }}");
+        background-size: cover;
+        background-position: center center;
+        background-attachment: fixed;
+        background-color: #f8f9fa; /* Fallback color */
+    }
+
+    /* Basic styling for the hero section */
+    .hero-section {
+        /* background-color: #f8f9fa; */ /* Removed background */
+        padding: 60px 0;
+        text-align: center;
+        margin-bottom: 60px; /* Increased bottom margin */
+        border-radius: 8px;
+    }
+    .hero-section h1 {
+        font-size: 2.8em;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 20px;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    .hero-section p {
+        font-size: 1.2em;
+        color: #555;
+        margin-bottom: 30px;
+        max-width: 700px;
+        margin-left: auto;
+        margin-right: auto;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    }
+    .hero-section .tagline {
+        font-size: 1.4em; /* Slightly larger for tagline */
+        color: #444; /* Slightly darker/prominent */
+        margin-bottom: 15px; /* Adjust spacing */
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    .hero-section .description {
+        font-size: 1.1em; /* Keep description size */
+        color: #666; /* Slightly lighter than tagline */
+        margin-bottom: 30px;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    }
+    .hero-section .btn-primary {
+        font-size: 1.1em;
+        padding: 12px 25px;
+    }
+
+    /* Styling for feature sections */
+    .feature-section {
+        padding: 50px 0;
+        /* border-bottom: 1px solid #eee; */ /* Remove bottom border */
+        margin-bottom: 60px; /* Add margin below features section */
+        background-color: #ffffff; /* White background */
+        border-radius: 12px; /* Softer corners */
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07); /* Subtle shadow */
+        padding: 50px 40px; /* Add internal padding */
+    }
+    .feature-section:last-child {
+        border-bottom: none;
+    }
+    .feature-section .row {
+        align-items: center; /* Vertically center content */
+    }
+    .feature-icon-lg {
+        font-size: 4em; /* Larger icons */
+        color: #007bff; /* Primary color */
+        margin-bottom: 20px;
+        display: block; /* Center align */
+        text-align: center;
+    }
+    .feature-title-lg {
+        font-size: 2em;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 15px;
+    }
+    .feature-description {
+        font-size: 1.1em;
+        color: #555;
+        margin-bottom: 20px;
+    }
+
+    /* Styling for the workflow section */
+    .workflow-section {
+        /* background-color: #f8f9fa; */ /* Removed background */
+        padding: 50px 0;
+        margin-top: 40px;
+        border-radius: 8px;
+        /* border-top: 1px solid #e9ecef; */ /* Removed border */
+    }
+    .workflow-section h2 {
+        text-align: center;
+        margin-bottom: 40px;
+        font-weight: bold;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    .workflow-step {
+        display: flex;
+        align-items: center;
+        margin-bottom: 25px;
+        padding: 15px;
+        background-color: #fff;
+        border-radius: 6px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .workflow-step .step-number {
+        font-size: 1.5em;
+        font-weight: bold;
+        color: #007bff;
+        margin-right: 20px;
+        min-width: 30px; /* Ensure consistent spacing */
+        text-align: center;
+    }
+    .workflow-step .step-content strong {
+        color: #333;
+    }
+    .workflow-step .step-content {
+       flex-grow: 1;
+    }
+
+</style>
+
+<!-- Hero Section -->
+<div class="hero-section">
+    <h1 data-i18n="home.title">Wisdom in DATA 智数平台</h1>
+    <p class="tagline" data-i18n="home.tagline">连接数据，洞见智慧</p>
+    <p class="description" data-i18n="home.description">一站式连接、管理、分析您的数据，并通过智能问答与知识图谱发掘深层价值，驱动明智决策。</p>
+    <a href="#features" class="btn btn-primary" data-i18n="home.explore_features">探索核心功能</a>
+</div>
+
+<!-- Features Section -->
+<div id="features" class="container feature-section">
+    <div class="row mb-5">
+        <div class="col-md-4 text-center">
+            <i class="fas fa-database feature-icon-lg"></i>
+        </div>
+        <div class="col-md-8">
+            <h3 class="feature-title-lg" data-i18n="home.data_management">便捷的数据管理</h3>
+            <p class="feature-description" data-i18n="home.data_management_desc">轻松导入 CSV、Excel 等多种结构化数据。平台将自动为您构建优化的数据库，并提供直观的可视化界面，方便您随时查看、管理和初步分析数据。</p>
+            <a href="{{ url_for('data_import.data_import') }}" class="btn btn-outline-primary" data-i18n="home.start_import">开始导入数据</a>
+        </div>
+    </div>
+
+    <div class="row mb-5 flex-row-reverse"> <!-- Reverse row for alternating layout -->
+         <div class="col-md-4 text-center">
+            <i class="fas fa-question-circle feature-icon-lg"></i>
+        </div>
+        <div class="col-md-8">
+            <h3 class="feature-title-lg" data-i18n="home.intelligent_qa">强大的智能问答</h3>
+            <p class="feature-description" data-i18n="home.intelligent_qa_desc">告别复杂的 SQL 查询！基于 Vanna 与 Ollama 集成的大模型问答系统，让您能用自然语言与数据对话。轻松提问，即时获得精准的数据分析结果与洞察。</p>
+            <a href="{{ url_for('qa.database_qa') }}" class="btn btn-outline-primary" data-i18n="home.experience_qa">体验智能问答</a>
+        </div>
+    </div>
+
+    <div class="row mb-5">
+         <div class="col-md-4 text-center">
+            <i class="fas fa-project-diagram feature-icon-lg"></i>
+        </div>
+        <div class="col-md-8">
+            <h3 class="feature-title-lg" data-i18n="home.knowledge_graph">深入的知识图谱</h3>
+            <p class="feature-description" data-i18n="home.knowledge_graph_desc">自动将您的数据转化为强大的知识图谱。通过图谱可视化与分析，直观揭示数据间隐藏的深层联系与模式，为复杂问题提供全新视角。</p>
+            <a href="{{ url_for('kg.knowledge_graph_construction') }}" class="btn btn-outline-primary" data-i18n="home.build_kg">构建知识图谱</a>
+        </div>
+    </div>
+</div>
+
+<!-- Workflow Section -->
+<div class="workflow-section">
+    <div class="container">
+        <h2 data-i18n="home.workflow_title">快速上手：您的数据智慧之旅</h2>
+        <div class="row">
+            <div class="col-md-10 offset-md-1">
+                 <div class="workflow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content" data-i18n="home.workflow_step1">通过 <strong>数据导入</strong> 功能，安全上传您的结构化数据文件。</div>
+                 </div>
+                 <div class="workflow-step">
+                     <div class="step-number">2</div>
+                     <div class="step-content" data-i18n="home.workflow_step2">使用 <strong>数据库管理</strong> 界面，确认数据已成功加载并进行预览。</div>
+                 </div>
+                 <div class="workflow-step">
+                     <div class="step-number">3</div>
+                     <div class="step-content" data-i18n="home.workflow_step3">前往 <strong>智能问答</strong>，用自然语言向您的数据提出问题，获取即时分析。</div>
+                 </div>
+                 <div class="workflow-step">
+                     <div class="step-number">4</div>
+                     <div class="step-content" data-i18n="home.workflow_step4">利用 <strong>知识图谱构建</strong> 功能，将数据模型化，挖掘潜在关系。</div>
+                 </div>
+                 <div class="workflow-step">
+                     <div class="step-number">5</div>
+                     <div class="step-content" data-i18n="home.workflow_step5">在 <strong>知识图谱可视化</strong> 中，探索数据节点与边的联系，发现隐藏模式。</div>
+                 </div>
+                 <div class="workflow-step">
+                     <div class="step-number">6</div>
+                     <div class="step-content" data-i18n="home.workflow_step6">结合 <strong>知识图谱问答</strong> 与 <strong>指标计算</strong>，进行更深层次的数据分析与验证。</div>
+                 </div>
+                 <div class="workflow-step">
+                     <div class="step-number">7</div>
+                     <div class="step-content" data-i18n="home.workflow_step7">基于全面的数据洞察和图谱分析，获取可靠的 <strong>决策建议</strong>。</div>
+                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %} 

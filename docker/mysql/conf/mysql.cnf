@@ -1,0 +1,44 @@
+[mysqld]
+# 基本配置
+default-authentication-plugin=mysql_native_password
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci
+
+# 连接配置
+max_connections=200
+max_user_connections=100
+wait_timeout=3600
+interactive_timeout=3600
+
+# 缓冲区配置
+innodb_buffer_pool_size=256M
+innodb_log_file_size=64M
+innodb_flush_log_at_trx_commit=1
+innodb_file_per_table=1
+
+# 查询缓存 (MySQL 8.0 已移除此功能)
+# query_cache_size=32M
+# query_cache_type=1
+
+# 其他优化
+tmp_table_size=32M
+max_heap_table_size=32M
+sort_buffer_size=2M
+read_buffer_size=1M
+
+# 日志配置
+log_error=/var/lib/mysql/error.log
+slow_query_log=1
+slow_query_log_file=/var/lib/mysql/slow.log
+long_query_time=2
+
+# 二进制日志
+log_bin=/var/lib/mysql/mysql-bin.log
+binlog_format=ROW
+binlog_expire_logs_seconds=604800
+
+[mysql]
+default-character-set=utf8mb4
+
+[client]
+default-character-set=utf8mb4 

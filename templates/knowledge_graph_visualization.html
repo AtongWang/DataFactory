@@ -1,0 +1,1666 @@
+{% extends "layout.html" %}
+
+{% block title %}WisdominDATA - 知识图谱可视化{% endblock %}
+
+{% block additional_styles %}
+<style>
+    #graph-container {
+        width: 100%;
+        height: 600px;
+        background-color: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        position: relative; /* Needed for absolute positioning of alerts */
+    }
+    
+    /* 全屏按钮样式 */
+    .fullscreen-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 100;
+        background-color: rgba(255, 255, 255, 0.8);
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .fullscreen-btn:hover {
+        background-color: #f0f0f0;
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* 全屏模式下的样式 */
+    #graph-container.fullscreen-mode {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 9999;
+        border-radius: 0;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .control-panel {
+        margin-bottom: 20px;
+    }
+    
+    .filter-section {
+        margin-bottom: 15px;
+    }
+    
+    .filter-title {
+        font-weight: bold;
+        margin-bottom: 8px;
+    }
+    
+    .node-info {
+        padding: 15px;
+        background-color: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        margin-top: 20px;
+    }
+    
+    .node-info-title {
+        font-weight: bold;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 5px;
+    }
+    
+    .property-row {
+        display: flex;
+        margin-bottom: 8px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #eee;
+        flex-wrap: wrap;
+    }
+    
+    .property-name {
+        font-weight: bold;
+        flex-basis: 160px;
+        flex-shrink: 0;
+        margin-right: 10px;
+        color: #555;
+    }
+
+    .property-value {
+        flex-grow: 1;
+        word-break: break-word;
+    }
+
+    .related-node {
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+        padding: 3px 0;
+    }
+
+    .relationship-direction {
+        margin: 0 8px;
+        font-weight: bold;
+        font-size: 1.1em;
+    }
+
+    .related-node-label {
+        margin-left: 8px;
+    }
+    
+    .legend-item {
+        display: inline-flex;
+        align-items: center;
+        margin-right: 15px;
+        margin-bottom: 8px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+    
+    .legend-item:hover {
+        background-color: #f0f0f0;
+    }
+    
+    .color-box {
+        width: 15px;
+        height: 15px;
+        margin-right: 5px;
+        border-radius: 3px;
+        box-shadow: 0 0 2px rgba(0,0,0,0.2);
+    }
+    
+    .item-count {
+        font-weight: bold;
+        margin-left: 5px;
+        color: #555;
+        font-size: 0.9em;
+        background: #f8f9fa;
+        padding: 1px 6px;
+        border-radius: 10px;
+        border: 1px solid #e9ecef;
+    }
+    
+    .active-filter-item {
+        background-color: #e9ecef;
+        padding: 5px 10px;
+        border-radius: 4px;
+        margin-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.9em;
+    }
+    
+    .remove-filter-btn {
+        background: none;
+        border: none;
+        color: #dc3545;
+        font-weight: bold;
+        cursor: pointer;
+        padding: 0 5px;
+    }
+
+    /* --- Statistics Panel Styling --- */
+    #graph-stats .list-group-item {
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        padding: 0.6rem 1rem;
+    }
+
+    #graph-stats .list-group-item:first-child {
+        border-top: none;
+    }
+
+    #graph-stats .list-group-item:last-child {
+        border-bottom: none;
+    }
+
+    #graph-stats h4 {
+        margin-bottom: 1rem;
+    }
+
+    #graph-stats .badge {
+        min-width: 30px;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title" data-i18n="kg_visualization.title">知识图谱可视化</h1>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="card">
+            <h2 class="card-title" data-i18n="kg_visualization.graph_selection">图谱选择</h2>
+            <div class="form-group">
+                <label for="graph-select" class="form-label" data-i18n="kg_visualization.select_graph">选择知识图谱</label>
+                <select id="graph-select" class="form-control">
+                    <option value="" data-i18n="kg_visualization.select_knowledge_graph">-- 选择知识图谱 --</option>
+                    <!-- 知识图谱列表将通过JavaScript动态加载 -->
+                </select>
+            </div>
+        </div>
+        
+        <div class="card control-panel">
+            <h2 class="card-title" data-i18n="kg_visualization.filter_controls">筛选控制</h2>
+            
+            <div class="filter-section">
+                <div class="filter-title" data-i18n="kg_visualization.node_types">节点类型</div>
+                <div id="node-type-filters">
+                    <!-- 节点类型筛选器将通过JavaScript动态加载 -->
+                </div>
+            </div>
+            
+            <div class="filter-section">
+                <div class="filter-title" data-i18n="kg_visualization.relationship_types">关系类型</div>
+                <div id="relationship-type-filters">
+                    <!-- 关系类型筛选器将通过JavaScript动态加载 -->
+                </div>
+            </div>
+            
+            <div class="filter-section">
+                <div class="filter-title" data-i18n="kg_visualization.property_filters">属性筛选</div>
+                <div id="active-filters" class="mb-2">
+                    <!-- 当前激活的属性筛选条件将通过JavaScript动态加载 -->
+                     <p class="text-muted small" id="no-active-filters-msg" data-i18n="kg_visualization.no_active_filters">暂无属性筛选条件</p>
+                </div>
+                <button id="show-add-filter-modal-btn" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addFilterModal">
+                    <i class="fas fa-plus"></i> <span data-i18n="kg_visualization.add_property_filter">添加属性筛选</span>
+                </button>
+            </div>
+            
+            <div class="filter-section">
+                <div class="filter-title" data-i18n="kg_visualization.layout_settings">布局设置</div>
+                <div class="form-group">
+                    <label for="layout-type" class="form-label" data-i18n="kg_visualization.layout_type">布局类型</label>
+                    <select id="layout-type" class="form-control">
+                        <option value="force" data-i18n="kg_visualization.force_directed_layout">力导向布局</option>
+                        <option value="circular" data-i18n="kg_visualization.circular_layout">环形布局</option>
+                        <option value="hierarchical" data-i18n="kg_visualization.hierarchical_layout">层次布局</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="node-size" class="form-label" data-i18n="kg_visualization.node_size">节点大小</label>
+                    <input type="range" id="node-size" class="form-control" min="5" max="30" value="15">
+                </div>
+                <div class="form-group">
+                    <label for="link-strength" class="form-label" data-i18n="kg_visualization.link_strength">连接强度</label>
+                    <input type="range" id="link-strength" class="form-control" min="0.1" max="1" step="0.1" value="0.5">
+                </div>
+            </div>
+            
+            <button id="apply-filters-btn" class="btn btn-primary" data-i18n="kg_visualization.apply_filters">应用筛选</button>
+            <button id="reset-filters-btn" class="btn btn-secondary" data-i18n="kg_visualization.reset_filters">重置</button>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <div class="card">
+            <h2 class="card-title" data-i18n="kg_visualization.graph_visualization_title">图谱可视化</h2>
+            <div class="legend" id="graph-legend">
+                <!-- 图例将通过JavaScript动态加载 -->
+            </div>
+            <div id="graph-container">
+                <!-- 全屏按钮 -->
+                <div class="fullscreen-btn" id="fullscreen-btn" data-i18n-title="kg_visualization.fullscreen_title" title="全屏显示">
+                    <i class="fas fa-expand"></i>
+                </div>
+                
+                <!-- 知识图谱将通过JavaScript动态加载 -->
+                <div class="d-flex justify-content-center align-items-center h-100">
+                    <p data-i18n="js.please_select_graph_for_visualization">请选择一个知识图谱进行可视化</p>
+                </div>
+            </div>
+        </div>
+        
+         <!-- 节点信息卡片移到这里 -->
+        <div class="card node-info" id="node-info-panel" style="display: none;">
+            <h2 class="card-title" data-i18n="kg_visualization.node_info">节点信息</h2>
+            <div class="node-info-title" id="node-title" data-i18n="kg_visualization.node_title">节点标题</div>
+            <div id="node-properties">
+                <!-- 节点属性将通过JavaScript动态加载 -->
+            </div>
+            <h3 class="mt-3" data-i18n="kg_visualization.related_nodes">相关节点</h3>
+            <div id="related-nodes">
+                <!-- 相关节点将通过JavaScript动态加载 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Filter Modal -->
+<div class="modal fade" id="addFilterModal" tabindex="-1" role="dialog" aria-labelledby="addFilterModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addFilterModalLabel" data-i18n="kg_visualization.add_property_filter_modal_title">添加属性筛选条件</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="add-filter-form">
+                    <div class="form-group">
+                        <label for="modal-node-type" data-i18n="kg_visualization.modal_node_type">节点类型</label>
+                        <select class="form-control" id="modal-node-type" required>
+                            <option value="" data-i18n="kg_visualization.modal_select_node_type">-- 选择节点类型 --</option>
+                            <!-- 节点类型选项将通过JavaScript动态加载 -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-property-name" data-i18n="kg_visualization.modal_property_name">属性名称</label>
+                        <select class="form-control" id="modal-property-name" required disabled>
+                            <option value="" data-i18n="kg_visualization.modal_select_node_type_first">-- 先选择节点类型 --</option>
+                            <!-- 属性名称选项将根据节点类型动态加载 -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-filter-operator" data-i18n="kg_visualization.modal_filter_operator">筛选方式</label>
+                        <select class="form-control" id="modal-filter-operator" required>
+                            <option value="equals" data-i18n="kg_visualization.modal_equals">等于 (=)</option>
+                            <option value="contains" data-i18n="kg_visualization.modal_contains">包含 (contains)</option>
+                            <option value="greater_than" data-i18n="kg_visualization.modal_greater_than">大于 (&gt;)</option>
+                            <option value="less_than" data-i18n="kg_visualization.modal_less_than">小于 (&lt;)</option>
+                            <option value="not_equals" data-i18n="kg_visualization.modal_not_equals">不等于 (!=)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-property-value" data-i18n="kg_visualization.modal_property_value">属性值</label>
+                        <input type="text" class="form-control" id="modal-property-value" data-i18n-placeholder="kg_visualization.modal_property_value_placeholder" placeholder="输入属性值" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" data-i18n="kg_visualization.modal_cancel">取消</button>
+                <button type="button" class="btn btn-primary" id="save-filter-btn" data-i18n="kg_visualization.modal_save">保存条件</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block additional_scripts %}
+<!-- 使用本地D3库代替CDN -->
+<script src="{{ url_for('static', filename='js/vendor/d3.min.js') }}"></script>
+
+<script>
+    // 全局变量保存图谱数据
+    let graphData = null;
+    let filteredGraphData = null;
+    let simulation = null;
+    let svg = null;
+    let nodeElements = null;
+    let linkElements = null;
+    let linkTextElements = null; 
+    let nodeColors = {};
+    let linkColors = {};
+    let activePropertyFilters = []; // 存储激活的属性筛选条件
+    let isFullscreen = false; // 跟踪全屏状态
+    
+    // 用于检测反向关系的后缀
+    const REVERSE_SUFFIX = "_reverse";
+    
+    // 性能阈值
+    const NODE_THRESHOLD = 1000;
+    const LINK_THRESHOLD = 2000;
+    
+    $(document).ready(function() {
+        // 全屏按钮点击事件
+        $('#fullscreen-btn').click(toggleFullscreen);
+        
+        // 监听全屏状态变化
+        document.addEventListener('fullscreenchange', fullscreenChangeHandler);
+        document.addEventListener('webkitfullscreenchange', fullscreenChangeHandler);
+        document.addEventListener('mozfullscreenchange', fullscreenChangeHandler);
+        document.addEventListener('MSFullscreenChange', fullscreenChangeHandler);
+        
+        // 知识图谱选择改变
+        $('#graph-select').change(function() {
+            const selectedGraphId = $(this).val();
+            if (selectedGraphId) {
+                loadKnowledgeGraph(selectedGraphId);
+            } else {
+                clearGraph();
+            }
+        });
+        
+        // 应用筛选按钮点击
+        $('#apply-filters-btn').click(applyFilters);
+        
+        // 重置筛选按钮点击
+        $('#reset-filters-btn').click(resetFilters);
+        
+        // 布局类型改变
+        $('#layout-type').change(function() {
+            if (simulation) {
+                updateLayout();
+            }
+        });
+        
+        // 节点大小改变 (改为 change 事件)
+        $('#node-size').on('change', function() {
+            if (nodeElements) {
+                updateNodeSize($(this).val());
+            }
+        });
+        
+        // 加载知识图谱列表
+        loadKnowledgeGraphs();
+        
+        // 检查URL参数，如果有图谱参数则加载对应的图谱
+        const urlParams = new URLSearchParams(window.location.search);
+        const graphId = urlParams.get('id');
+        if (graphId) {
+            $('#graph-select').val(graphId);
+            loadKnowledgeGraph(graphId);
+        }
+        
+        // --- 新增模态框相关事件 ---
+        
+        // 模态框显示时，加载节点类型
+        $('#addFilterModal').on('show.bs.modal', function (event) {
+            populateModalNodeTypes();
+            // 重置表单和属性下拉框
+            $('#add-filter-form')[0].reset();
+            $('#modal-property-name').html('<option value="">-- 先选择节点类型 --</option>').prop('disabled', true);
+        });
+
+        // 模态框内节点类型改变时，加载属性
+        $('#modal-node-type').change(function() {
+            const selectedType = $(this).val();
+            populateModalAttributes(selectedType);
+        });
+
+        // 保存筛选条件按钮点击
+        $('#save-filter-btn').click(addPropertyFilter);
+        
+        // 为动态添加的移除按钮设置事件委托
+        $('#active-filters').on('click', '.remove-filter-btn', function() {
+            const indexToRemove = $(this).data('index');
+            removePropertyFilter(indexToRemove);
+        });
+    });
+    
+    // 全屏切换函数
+    function toggleFullscreen() {
+        const graphContainer = document.getElementById('graph-container');
+        
+        if (!isFullscreen) {
+            // 进入全屏
+            if (graphContainer.requestFullscreen) {
+                graphContainer.requestFullscreen();
+            } else if (graphContainer.webkitRequestFullscreen) { /* Safari */
+                graphContainer.webkitRequestFullscreen();
+            } else if (graphContainer.msRequestFullscreen) { /* IE11 */
+                graphContainer.msRequestFullscreen();
+            } else if (graphContainer.mozRequestFullScreen) { /* Firefox */
+                graphContainer.mozRequestFullScreen();
+            }
+        } else {
+            // 退出全屏
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { /* Safari */
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { /* IE11 */
+                document.msExitFullscreen();
+            } else if (document.mozCancelFullScreen) { /* Firefox */
+                document.mozCancelFullScreen();
+            }
+        }
+    }
+    
+    // 全屏状态变化处理
+    function fullscreenChangeHandler() {
+        const graphContainer = document.getElementById('graph-container');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        
+        // 检查当前是否全屏
+        isFullscreen = Boolean(
+            document.fullscreenElement || 
+            document.webkitFullscreenElement || 
+            document.mozFullScreenElement || 
+            document.msFullscreenElement
+        );
+        
+        // 更新全屏按钮图标
+        if (isFullscreen) {
+            $(fullscreenBtn).html('<i class="fas fa-compress"></i>');
+            $(fullscreenBtn).attr('title', i18nHelper.t('kg_visualization.exit_fullscreen_title'));
+            $(graphContainer).addClass('fullscreen-mode');
+            
+            // 如果有模拟，在全屏状态改变后重新调整布局
+            if (simulation && svg) {
+                // 调整SVG大小以填充全屏容器
+                const newWidth = $(graphContainer).width();
+                const newHeight = $(window).height();
+                
+                svg.attr('width', newWidth)
+                   .attr('height', newHeight);
+                   
+                // 重新定位中心力
+                simulation.force('center', d3.forceCenter(newWidth / 2, newHeight / 2));
+                
+                // 更新力布局并重启模拟
+                simulation.alpha(0.3).restart();
+            }
+        } else {
+            $(fullscreenBtn).html('<i class="fas fa-expand"></i>');
+            $(fullscreenBtn).attr('title', i18nHelper.t('kg_visualization.fullscreen_title'));
+            $(graphContainer).removeClass('fullscreen-mode');
+            
+            // 退出全屏后也需要调整布局
+            if (simulation && svg) {
+                // 调整回原始大小
+                const newWidth = $(graphContainer).width();
+                const newHeight = 600; // 原始高度
+                
+                svg.attr('width', newWidth)
+                   .attr('height', newHeight);
+                   
+                // 重新定位中心力
+                simulation.force('center', d3.forceCenter(newWidth / 2, newHeight / 2));
+                
+                // 更新力布局并重启模拟
+                simulation.alpha(0.3).restart();
+            }
+        }
+    }
+    
+    // 加载知识图谱列表
+    function loadKnowledgeGraphs() {
+        fetch('/api/kg/graphs')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success' && data.graphs && data.graphs.length > 0) {
+                    const $select = $('#graph-select');
+                    $select.empty();
+                    $select.append('<option value="">-- 选择知识图谱 --</option>');
+                    
+                    data.graphs.forEach(graph => {
+                        // 只显示已完成的图谱
+                        if (graph.status === 'completed') {
+                            $select.append(`<option value="${graph.id}">${graph.name} (${graph.node_count}节点, ${graph.relationship_count}关系)</option>`);
+                        } else {
+                            $select.append(`<option value="${graph.id}" disabled>${graph.name} (${graph.status})</option>`);
+                        }
+                    });
+                } else {
+                    showMessage(i18nHelper.t('kg_visualization.no_graphs_for_visualization'), 'error');
+                }
+            })
+            .catch(error => {
+                console.error('获取知识图谱列表失败:', error);
+                showMessage(i18nHelper.t('kg_visualization.no_graphs_for_visualization'), 'error');
+            });
+    }
+    
+    // 加载知识图谱数据
+    function loadKnowledgeGraph(graphId) {
+        $('#graph-container').html('<div class="d-flex justify-content-center align-items-center h-100"><p>' + i18nHelper.t('kg_visualization.loading_graph_data') + '</p></div>');
+        
+        // 清除旧的警告信息
+        $('#graph-container .alert').remove();
+        
+        fetch(`/api/kg/graphs/${graphId}/visualization-data`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // --- 性能警告 ---
+                    if (data.nodes && data.relationships && (data.nodes.length > NODE_THRESHOLD || data.relationships.length > LINK_THRESHOLD)) {
+                         showMessage(i18nHelper.t('kg_visualization.graph_data_large_warning') + ` (${data.nodes.length} ` + i18nHelper.t('kg_visualization.nodes') + `, ${data.relationships.length} ` + i18nHelper.t('kg_visualization.relationships') + `)` + i18nHelper.t('kg_visualization.rendering_may_take_time'), "warning");
+                    }
+                    
+                    graphData = transformGraphData(data);
+                    // 初始化时重置属性过滤器
+                    activePropertyFilters = []; 
+                    updateActiveFiltersDisplay(); 
+                    
+                    filteredGraphData = JSON.parse(JSON.stringify(graphData)); // 创建深拷贝
+                    
+                    // 加载筛选器选项 (使用 graphData 中的基础关系类型)
+                    loadFilterOptions(graphData);
+                    
+                    // 渲染图谱
+                    renderGraph();
+                } else {
+                    showMessage(data.message || i18nHelper.t('kg_visualization.load_graph_data_failed'), 'error');
+                }
+            })
+            .catch(error => {
+                console.error('加载图谱数据失败:', error);
+                showMessage(i18nHelper.t('kg_visualization.load_graph_data_failed'), 'error');
+            });
+    }
+    
+    // 转换API返回的图谱数据为D3可用的格式，并处理双向关系
+    function transformGraphData(apiData) {
+        const nodeMap = {};
+        const nodeIdSet = new Set();
+        
+        const nodes = apiData.nodes.map((node, index) => {
+            nodeMap[node.id] = index;
+            nodeIdSet.add(node.id);
+            return {
+                id: node.id, // Keep original ID for lookups
+                index: index, // Store D3 index
+                type: node.type,
+                attributes: node.attributes,
+                label: getLabelFromNode(node),
+                nodeSize: 15
+            };
+        });
+        
+        const links = [];
+        const baseRelationshipTypes = new Set();
+        const processedLinkKeys = new Set(); // Stores "sourceId->targetId->type" to avoid duplicates/double processing
+        const relationshipsByIdPair = {}; // Stores relationships keyed by "sourceId->targetId"
+
+        // First pass: Organize relationships for easy lookup
+        apiData.relationships.forEach(rel => {
+            const sourceId = rel.source;
+            const targetId = rel.target;
+            const key = `${sourceId}->${targetId}`;
+            if (!relationshipsByIdPair[key]) {
+                relationshipsByIdPair[key] = [];
+            }
+            relationshipsByIdPair[key].push(rel);
+        });
+
+        // Second pass: Process relationships, detect and merge bidirectional ones
+        apiData.relationships.forEach(rel => {
+            const sourceId = rel.source;
+            const targetId = rel.target;
+            const type = rel.type;
+            const forwardKey = `${sourceId}->${targetId}->${type}`;
+
+            // Skip if this specific link direction/type has been processed
+            if (processedLinkKeys.has(forwardKey)) {
+                return;
+            }
+
+            // Check node existence
+            if (!nodeIdSet.has(sourceId) || !nodeIdSet.has(targetId)) {
+                 console.warn(`Filtering out relationship due to missing node(s): type=${type}, source=${sourceId}, target=${targetId}`);
+                return;
+            }
+            
+            const sourceIndex = nodeMap[sourceId];
+            const targetIndex = nodeMap[targetId];
+
+            let isBidirectional = false;
+            let baseType = type;
+            let reverseType = null;
+
+            // Check for potential reverse relationship
+            if (type.endsWith(REVERSE_SUFFIX)) {
+                // This might be a reverse link, check if the forward link exists
+                baseType = type.substring(0, type.length - REVERSE_SUFFIX.length);
+                reverseType = type; // Keep track of the reverse type name
+                const reverseKeyCheck = `${targetId}->${sourceId}`;
+                const potentialForwardRels = relationshipsByIdPair[reverseKeyCheck] || [];
+                const forwardRel = potentialForwardRels.find(r => r.type === baseType);
+
+                if (forwardRel) {
+                    const backwardKey = `${targetId}->${sourceId}->${baseType}`;
+                     // Check if the forward counterpart is already processed to avoid double merging
+                    if (!processedLinkKeys.has(backwardKey)) {
+                        isBidirectional = true;
+                        processedLinkKeys.add(backwardKey); // Mark forward as processed too
+                        processedLinkKeys.add(forwardKey);   // Mark reverse as processed
+                    }
+                }
+            } else {
+                // This is a forward link, check if the reverse link exists
+                reverseType = `${type}${REVERSE_SUFFIX}`;
+                const reverseKeyCheck = `${targetId}->${sourceId}`;
+                const potentialReverseRels = relationshipsByIdPair[reverseKeyCheck] || [];
+                const reverseRel = potentialReverseRels.find(r => r.type === reverseType);
+
+                if (reverseRel) {
+                    const backwardKey = `${targetId}->${sourceId}->${reverseType}`;
+                    // Check if the reverse counterpart is already processed
+                    if (!processedLinkKeys.has(backwardKey)) {
+                        isBidirectional = true;
+                        processedLinkKeys.add(backwardKey); // Mark reverse as processed too
+                        processedLinkKeys.add(forwardKey);   // Mark forward as processed
+                    }
+                }
+            }
+
+            // If not bidirectional and not yet processed, add as unidirectional
+            if (!isBidirectional && !processedLinkKeys.has(forwardKey)) {
+                 links.push({
+                    source: sourceIndex,
+                    target: targetIndex,
+                    type: type, // Use original type
+                    properties: rel.properties || {},
+                    bidirectional: false
+                });
+                baseRelationshipTypes.add(type); // Add original type
+                processedLinkKeys.add(forwardKey);
+            } else if (isBidirectional) {
+                // Add the merged bidirectional link (using baseType)
+                 links.push({
+                    source: sourceIndex,
+                    target: targetIndex,
+                    type: baseType, // Use base type
+                    properties: rel.properties || {}, // Could merge properties if needed
+                    bidirectional: true
+                });
+                baseRelationshipTypes.add(baseType); // Add only base type
+                // Keys were already added above when bidirectional was detected
+            }
+        });
+
+        console.log(`原始关系数量: ${apiData.relationships.length}, 转换后链接数量: ${links.length}`);
+        
+        // Generate node type colors
+        const nodeTypes = [...new Set(nodes.map(node => node.type))];
+        nodeTypes.forEach((type, index) => {
+            nodeColors[type] = d3.schemeCategory10[index % 10];
+        });
+        
+        // Generate relationship type colors (using base types)
+        const finalRelationshipTypes = Array.from(baseRelationshipTypes);
+        finalRelationshipTypes.forEach((type, index) => {
+            linkColors[type] = d3.schemeSet2[index % 8];
+        });
+        
+        // 重新计算合并双向关系后的关系统计数据
+        const mergedStatistics = { ...apiData.statistics }; // 复制原始统计信息
+        
+        // 保持节点统计不变
+        // 重新计算关系统计，使其与合并后的links数组一致
+        const relationshipTypeStats = {};
+        links.forEach(link => {
+            if (!relationshipTypeStats[link.type]) {
+                relationshipTypeStats[link.type] = 0;
+            }
+            relationshipTypeStats[link.type]++;
+        });
+        
+        // 计算新的关系总数
+        const newRelationshipCount = links.length;
+        
+        // 更新统计信息对象
+        mergedStatistics.relationship_count = newRelationshipCount;
+        mergedStatistics.relationship_types = relationshipTypeStats;
+        
+        // 添加说明，标记这是经过双向关系合并后的统计
+        mergedStatistics.is_merged_stats = true;
+        
+        console.log("原始关系数量统计:", apiData.statistics.relationship_count);
+        console.log("合并双向关系后的关系数量:", newRelationshipCount);
+        console.log("合并后的关系类型统计:", relationshipTypeStats);
+        
+        return { 
+            nodes, 
+            links, 
+            nodeTypes, 
+            relationshipTypes: finalRelationshipTypes, // Return unique base types
+            statistics: mergedStatistics // 使用更新后的统计信息
+        };
+    }
+    
+    // 从节点数据中获取显示标签
+    function getLabelFromNode(node) {
+        // console.log("getLabelFromNode - Processing Node:", JSON.parse(JSON.stringify(node))); // 调试完成后可以注释掉
+        
+        // --- 新逻辑：优先从 ID 获取标签 ---
+        if (node.id && typeof node.id === 'string' && node.id.includes(':')) {
+            const parts = node.id.split(':');
+            const potentialLabel = parts.slice(1).join(':').trim(); // 取冒号后的所有部分并去除首尾空格
+            if (potentialLabel) { // 确保不是空字符串
+                // console.log("getLabelFromNode - Using label from ID:", potentialLabel); // 调试完成后可以注释掉
+                return potentialLabel;
+            }
+        }
+        // console.warn("getLabelFromNode - Could not derive label from ID, falling back to attributes."); // 调试完成后可以注释掉
+
+        // --- 回退逻辑：如果 ID 不行，再尝试从属性获取 ---
+        if (node.attributes) {
+            // 尝试使用第一个标识符列或名称类的字段作为标签
+            const nameFields = ['name', 'title', 'label', 'id', 'key', '名称']; 
+            for (const field of nameFields) {
+                if (node.attributes[field]) {
+                    const label = String(node.attributes[field]);
+                    // console.log(`getLabelFromNode - Fallback: Found label in preferred field '${field}':`, label); // 调试完成后可以注释掉
+                    return label;
+                }
+            }
+
+            // 如果找不到符合的字段，使用第一个非空属性
+            for (const [key, value] of Object.entries(node.attributes)) {
+                if (value !== null && value !== undefined && String(value).trim() !== '') { 
+                     const label = String(value);
+                     // console.log(`getLabelFromNode - Fallback: Found label in attribute '${key}':`, label); // 调试完成后可以注释掉
+                     return label;
+                }
+            }
+        }
+        
+        // --- 最后的备用方案: 如果连属性都没有，还是用ID处理，即使它格式不对 ---
+        const finalFallbackLabel = String(node.id).split(':').pop();
+        // console.log("getLabelFromNode - Using final fallback label from ID (split pop):", finalFallbackLabel); // 调试完成后可以注释掉
+        return finalFallbackLabel;
+    }
+    
+    // 加载筛选选项 (使用基础关系类型)
+    function loadFilterOptions(data) { // Renamed parameter for clarity
+        // 加载节点类型筛选器
+        const $nodeTypeFilters = $('#node-type-filters');
+        $nodeTypeFilters.empty();
+        
+        data.nodeTypes.forEach(type => {
+            const color = nodeColors[type];
+            $nodeTypeFilters.append(`
+                <div class="form-check">
+                    <input class="form-check-input node-type-checkbox" type="checkbox" value="${type}" id="node-type-${type}" checked>
+                    <label class="form-check-label" for="node-type-${type}">
+                        <span class="color-box" style="background-color: ${color};"></span>
+                        ${type}
+                    </label>
+                </div>
+            `);
+        });
+        
+        // 加载关系类型筛选器 (使用基础类型)
+        const $relationshipTypeFilters = $('#relationship-type-filters');
+        $relationshipTypeFilters.empty();
+        
+        data.relationshipTypes.forEach(type => { // Iterate over base types
+            const color = linkColors[type];
+            $relationshipTypeFilters.append(`
+                <div class="form-check">
+                    <input class="form-check-input relationship-type-checkbox" type="checkbox" value="${type}" id="relationship-type-${type}" checked>
+                    <label class="form-check-label" for="relationship-type-${type}">
+                        <span class="color-box" style="background-color: ${color};"></span>
+                        ${type} 
+                    </label>
+                </div>
+            `);
+        });
+    }
+    
+    // 渲染图谱
+    function renderGraph() {
+        $('#graph-container').empty();
+        
+        // 添加全屏按钮
+        $('#graph-container').append(`
+            <div class="fullscreen-btn" id="fullscreen-btn" title="` + i18nHelper.t('kg_visualization.fullscreen_title') + `">
+                <i class="fas fa-expand"></i>
+            </div>
+        `);
+        // 重新绑定全屏按钮事件
+        $('#fullscreen-btn').click(toggleFullscreen);
+        
+        // 检查是否有足够的数据可视化
+        if (!filteredGraphData || !filteredGraphData.nodes || filteredGraphData.nodes.length === 0) {
+            $('#graph-container').append('<div class="d-flex justify-content-center align-items-center h-100"><p>' + i18nHelper.t('kg_visualization.no_sufficient_data') + '</p></div>');
+            return;
+        }
+        
+        try {
+            // 创建SVG容器
+            const width = $('#graph-container').width();
+            const height = isFullscreen ? $(window).height() : 600;
+            
+            svg = d3.select('#graph-container')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+                
+            // 添加窗口大小调整监听器
+            window.addEventListener('resize', function() {
+                if (isFullscreen && svg) {
+                    const newWidth = $('#graph-container').width();
+                    const newHeight = $(window).height();
+                    
+                    svg.attr('width', newWidth)
+                       .attr('height', newHeight);
+                       
+                    // 如果有模拟，更新中心力
+                    if (simulation) {
+                        simulation.force('center', d3.forceCenter(newWidth / 2, newHeight / 2));
+                        simulation.alpha(0.1).restart();
+                    }
+                }
+            });
+                
+            // 添加箭头标记定义 (为每种关系类型定义起始和结束箭头)
+            const defs = svg.append("defs");
+            
+            filteredGraphData.relationshipTypes.forEach(type => {
+                const color = linkColors[type] || '#999';
+                
+                // End Arrow (like before)
+                defs.append("marker")
+                    .attr("id", `arrowhead-end-${type}`)
+                    .attr("viewBox", "0 -5 10 10")
+                    .attr("refX", 10) // Arrow tip is at refX
+                    .attr("refY", 0)
+                    .attr("markerWidth", 6)
+                    .attr("markerHeight", 6)
+                    .attr("orient", "auto")
+                    .append("path")
+                    .attr("fill", color)
+                    .attr("d", "M0,-5L10,0L0,5"); // Path starts at 0, ends at 10
+
+                // Start Arrow (for bidirectional)
+                 defs.append("marker")
+                    .attr("id", `arrowhead-start-${type}`)
+                    .attr("viewBox", "0 -5 10 10") // Keep same viewbox
+                    .attr("refX", 0)  // Attach at the start point (arrow tip should be here)
+                    .attr("refY", 0)
+                    .attr("markerWidth", 6)
+                    .attr("markerHeight", 6)
+                    .attr("orient", "auto") // Use auto orientation, D3 should handle reversal
+                    .append("path")
+                    .attr("fill", color)
+                    .attr("d", "M10,-5L0,0L10,5"); // Path points backwards from refX=0
+            });
+                
+            // 获取统计信息以用于图例
+            const statistics = graphData.statistics || {};
+            const nodeTypeStats = statistics.node_types || {};
+            const relationshipTypeStats = statistics.relationship_types || {};
+            const totalNodes = statistics.node_count || 0;
+            const totalRelationships = statistics.relationship_count || 0;
+                
+            // 显示图例
+            const $legend = $('#graph-legend');
+            $legend.empty();
+            $legend.append(`
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="m-0">` + i18nHelper.t('kg_visualization.graph_overview') + `</h5>
+                    <span class="badge bg-primary rounded-pill ms-2">
+                        <i class="fas fa-project-diagram"></i> ${totalNodes}` + i18nHelper.t('kg_visualization.nodes') + ` / ${totalRelationships}` + i18nHelper.t('kg_visualization.relationships') + `
+                    </span>
+                </div>
+                ${statistics.is_merged_stats ? '<p class="text-muted small mb-2"><i class="fas fa-info-circle"></i> ' + i18nHelper.t('kg_visualization.stats_adjusted_notice') + '</p>' : ''}
+             `); 
+             
+             // Add Node Types Legend with counts
+             $legend.append('<h6 class="border-bottom pb-1">' + i18nHelper.t('kg_visualization.node_types_legend') + '</h6>');
+             // Use graphData.nodeTypes which should be consistent
+             (graphData.nodeTypes || []).forEach(type => {
+                 const color = nodeColors[type];
+                 const count = nodeTypeStats[type] || 0;
+                 $legend.append(`
+                     <div class="legend-item">
+                         <span class="color-box" style="background-color: ${color};"></span>
+                         <span>${type}</span>
+                         <span class="item-count">${count}</span>
+                     </div>
+                 `);
+             });
+
+             // Add Relationship Types Legend with counts
+             $legend.append('<h6 class="mt-3 border-bottom pb-1">' + i18nHelper.t('kg_visualization.relationship_types_legend') + '</h6>');
+              // Use graphData.relationshipTypes which contains base types
+             (graphData.relationshipTypes || []).forEach(type => {
+                 const color = linkColors[type];
+                 const count = relationshipTypeStats[type] || 0;
+                 // Check if the marker definition actually exists
+                 if (defs.select(`#arrowhead-end-${type}`).node()) {
+                     $legend.append(`
+                         <div class="legend-item">
+                             <svg width="20" height="15" style="vertical-align: middle;">
+                                 <!-- Show single arrow in legend -->
+                                 <line x1="0" y1="7" x2="15" y2="7" stroke="${color}" stroke-width="2" marker-end="url(#arrowhead-end-${type})"></line>
+                             </svg>
+                             <span style="margin-left: 5px;">${type}</span>
+                             <span class="item-count">${count}</span>
+                         </div>
+                     `);
+                 } else {
+                      console.warn(`Arrowhead definition for type "${type}" not found when creating legend item.`);
+                 }
+             });
+            
+            // 添加缩放和平移功能
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 4])
+                .on("zoom", (event) => {
+                    container.attr("transform", event.transform);
+                    
+                    // --- 实现 LOD (Level of Detail) ---
+                    const currentScale = event.transform.k;
+                    // 调整阈值 0.7 可以根据实际效果修改
+                    const labelVisibility = currentScale > 0.7 ? 'visible' : 'hidden'; 
+                    
+                    // 控制节点标签可见性
+                    container.selectAll(".nodes text")
+                             .style("visibility", labelVisibility);
+                             
+                    // 控制关系标签可见性
+                    container.selectAll(".link-labels text")
+                             .style("visibility", labelVisibility);
+                });
+                
+            svg.call(zoom);
+            
+            // 创建容器组
+            const container = svg.append("g");
+            
+            // 创建节点的深拷贝避免引用问题
+            // Map nodes to include references for D3 simulation
+            const nodesCopy = filteredGraphData.nodes.map(n => ({ ...n }));
+            
+            // Filter and map links, ensuring source/target are indices for D3
+             // Ensure links use the indices from nodesCopy
+            const linksCopy = filteredGraphData.links.filter(link => {
+                 // link.source and link.target should already be indices from transformGraphData
+                const sourceIndex = typeof link.source === 'object' ? link.source.index : link.source;
+                const targetIndex = typeof link.target === 'object' ? link.target.index : link.target;
+                const validIndices = sourceIndex >= 0 && sourceIndex < nodesCopy.length &&
+                                   targetIndex >= 0 && targetIndex < nodesCopy.length;
+                if (!validIndices) {
+                    console.warn(`renderGraph 中发现无效链接索引: source=${sourceIndex}, target=${targetIndex}, nodesCopy 长度=${nodesCopy.length}, link type=${link.type}`);
+                }
+                 return validIndices;
+            }).map(link => {
+                // Ensure source/target are indices
+                const sourceIndex = typeof link.source === 'object' ? link.source.index : link.source;
+                const targetIndex = typeof link.target === 'object' ? link.target.index : link.target;
+                 return { 
+                     ...link,
+                     source: sourceIndex, 
+                     target: targetIndex 
+                 };
+            });
+
+            console.log(`渲染: ${nodesCopy.length}个节点, ${linksCopy.length}个关系 (包含合并后的双向关系)`); 
+            
+            // 创建力模拟
+            simulation = d3.forceSimulation(nodesCopy)
+                // forceLink uses indices in nodesCopy
+                .force("link", d3.forceLink(linksCopy).id(d => d.index).distance(100)) 
+                // --- 优化力模拟参数 ---
+                .force("charge", d3.forceManyBody().strength(-150).distanceMax(1000)) // 减小强度并限制范围
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("collide", d3.forceCollide().radius(d => (d.nodeSize || 15) + 5)); // Adjust collision based on actual size
+            
+            // 创建链接
+            linkElements = container.append("g")
+                .attr("class", "links")
+                .selectAll("line")
+                .data(linksCopy) 
+                .enter().append("line")
+                .attr("stroke", d => linkColors[d.type] || "#999")
+                .attr("stroke-width", 1.5)
+                // Apply start marker only if bidirectional
+                .attr("marker-start", d => d.bidirectional ? `url(#arrowhead-start-${d.type})` : null) 
+                // Always apply end marker (adjust if needed for bi-directional clarity)
+                .attr("marker-end", d => `url(#arrowhead-end-${d.type})`);
+                
+            // 创建节点
+            const nodeGroup = container.append("g")
+                .attr("class", "nodes")
+                .selectAll(".node")
+                .data(nodesCopy, d => d.id) // Use node ID as key
+                .enter().append("g")
+                .attr("class", "node")
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended))
+                .on("click", showNodeInfo);
+                
+            // 添加节点圆形
+            nodeGroup.append("circle")
+                .attr("r", d => d.nodeSize)
+                .attr("fill", d => nodeColors[d.type] || "#666");
+                
+            // 添加节点标签
+            nodeGroup.append("text")
+                .attr("dx", d => (d.nodeSize || 15) + 2) // Position relative to node size
+                .attr("dy", ".35em")
+                .text(d => d.label)
+                .style("font-size", "10px")
+                .style("pointer-events", "none")
+                .style("text-shadow", "0 1px 0 #fff, 1px 0 0 #fff, 0 -1px 0 #fff, -1px 0 0 #fff")
+                .style("visibility", "visible"); // --- 初始可见性 ---
+                
+            nodeElements = nodeGroup;
+            
+            // 创建链接文本
+            linkTextElements = container.append("g")
+                .attr("class", "link-labels")
+                .selectAll("text")
+                .data(linksCopy)
+                .enter().append("text")
+                .style("font-size", "9px")
+                .attr("fill", "#555") 
+                .attr("stroke", "#fff") 
+                .attr("stroke-width", 0.3)
+                .attr("paint-order", "stroke")
+                .attr("text-anchor", "middle") 
+                .attr("dominant-baseline", "central")
+                // Show (双向) for bidirectional links
+                .text(d => d.bidirectional ? `${d.type} (` + i18nHelper.t('kg_visualization.bidirectional') + `)` : d.type)
+                .style("visibility", "visible"); // --- 初始可见性 ---
+            
+            // 更新模拟
+            simulation.on("tick", () => {
+                // Update link positions, adjusting ends for node radius and arrow size
+                linkElements
+                    .each(function(d) {
+                        // Ensure source and target are objects with x,y,nodeSize
+                        if (typeof d.source !== 'object' || typeof d.target !== 'object') return;
+
+                        const dx = d.target.x - d.source.x;
+                        const dy = d.target.y - d.source.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        const sourceRadius = d.source.nodeSize || 15;
+                        // Adjust target radius slightly to prevent arrowhead overlap
+                        // The marker end tip is at refX=10. Marker width is 6.
+                        // Let's shorten the line just by the node radius.
+                        const targetRadius = (d.target.nodeSize || 15);
+                        // Adjust source radius for start marker if bidirectional
+                        // The marker start tip is at refX=0. Path starts backward from there.
+                        // Shorten line just by node radius.
+                        const effectiveSourceRadius = sourceRadius;
+
+                        if (distance === 0) return; 
+
+                        const normX = dx / distance;
+                        const normY = dy / distance;
+
+                        // Calculate adjusted start and end points on node boundaries
+                        const startX = d.source.x + normX * effectiveSourceRadius;
+                        const startY = d.source.y + normY * effectiveSourceRadius;
+                        const endX = d.target.x - normX * targetRadius;
+                        const endY = d.target.y - normY * targetRadius;
+
+                        d3.select(this)
+                            .attr("x1", startX)
+                            .attr("y1", startY)
+                            .attr("x2", endX)
+                            .attr("y2", endY);
+                    });
+                    
+                // Update node positions
+                nodeGroup
+                    .attr("transform", d => `translate(${d.x || 0}, ${d.y || 0})`); // Add fallback for safety
+
+                // Update link label positions
+                linkTextElements
+                    .attr("x", d => {
+                        if (typeof d.source !== 'object' || typeof d.target !== 'object') return 0;
+                        return (d.source.x + d.target.x) / 2;
+                     })
+                    .attr("y", d => {
+                         if (typeof d.source !== 'object' || typeof d.target !== 'object') return 0;
+                        return (d.source.y + d.target.y) / 2;
+                     });
+            });
+        } catch (error) {
+            console.error("渲染图谱时出错:", error);
+            $('#graph-container').html(`
+                <div class="alert alert-danger">
+                    ` + i18nHelper.t('kg_visualization.rendering_graph_error') + `: ${error.message}<br>
+                    ` + i18nHelper.t('kg_visualization.try_different_graph') + `
+                </div>
+                <div class="fullscreen-btn" id="fullscreen-btn" title="` + i18nHelper.t('kg_visualization.fullscreen_title') + `">
+                    <i class="fas fa-expand"></i>
+                </div>
+            `);
+            // 重新绑定全屏按钮事件
+            $('#fullscreen-btn').click(toggleFullscreen);
+        }
+    }
+    
+    // 拖拽开始
+    function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+    }
+    
+    // 拖拽中
+    function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+    }
+    
+    // 拖拽结束
+    function dragended(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        // Keep node fixed after drag? Optional.
+        // d.fx = d.x; 
+        // d.fy = d.y;
+        // Or release it:
+         d.fx = null;
+         d.fy = null;
+    }
+    
+    // 显示节点详细信息
+    function showNodeInfo(event, d_node) { // Renamed param to avoid conflict
+        const $nodeInfo = $('#node-info-panel');
+        const $nodeTitle = $('#node-title');
+        const $nodeProperties = $('#node-properties');
+        const $relatedNodes = $('#related-nodes');
+        
+        $nodeTitle.text(`${d_node.type}: ${d_node.label}`);
+        $nodeProperties.empty();
+        
+        // 显示节点属性
+        if (d_node.attributes) {
+            for (const [key, value] of Object.entries(d_node.attributes)) {
+                $nodeProperties.append(`
+                    <div class="property-row">
+                        <div class="property-name">${key}:</div>
+                        <div class="property-value">${value !== null && value !== undefined ? value : 'N/A'}</div>
+                    </div>
+                `);
+            }
+        } else {
+             $nodeProperties.append('<p>' + i18nHelper.t('kg_visualization.no_attributes') + '</p>');
+        }
+        
+        // 查找相关节点
+        $relatedNodes.empty();
+        try {
+             // Use the full original graphData for finding relations to avoid filter issues
+            const relatedLinks = (graphData.links || []).filter(link => {
+                // Need to map indices back to original IDs for comparison
+                const sourceNode = graphData.nodes[link.source];
+                const targetNode = graphData.nodes[link.target];
+                 return sourceNode && targetNode && (sourceNode.id === d_node.id || targetNode.id === d_node.id);
+            });
+            
+            if (relatedLinks.length > 0) {
+                const relatedNodesHTML = relatedLinks.map(link => {
+                    // Get the full node objects using the indices from the link
+                    const sourceNode = graphData.nodes[link.source];
+                    const targetNode = graphData.nodes[link.target];
+
+                    if (!sourceNode || !targetNode) return ''; // Skip if nodes are missing
+
+                    const isSource = sourceNode.id === d_node.id;
+                    const relatedNode = isSource ? targetNode : sourceNode;
+                    
+                    // Determine direction and label based on bidirectional flag
+                    const direction = link.bidirectional ? "↔" : (isSource ? "→" : "←");
+                    const relationshipLabel = link.bidirectional ? `${link.type} (` + i18nHelper.t('kg_visualization.bidirectional') + `)` : link.type;
+                    
+                    return `
+                        <div class="related-node">
+                             <span class="badge" style="background-color: ${nodeColors[relatedNode.type] || '#666'}; color: white;">${relatedNode.type}</span>
+                            <span class="relationship-direction">${direction}</span>
+                             <span class="badge" style="background-color: ${linkColors[link.type] || '#999'}; color: white;">${relationshipLabel}</span>
+                            <span class="related-node-label">${relatedNode.label}</span>
+                        </div>
+                    `;
+                }).join('');
+                
+                $relatedNodes.html(relatedNodesHTML);
+            } else {
+                $relatedNodes.html('<p>' + i18nHelper.t('kg_visualization.no_related_nodes') + '</p>');
+            }
+        } catch (error) {
+            console.error("显示相关节点时出错:", error, "Node:", d_node);
+            $relatedNodes.html('<p class="text-danger">' + i18nHelper.t('kg_visualization.loading_related_nodes_error') + '</p>');
+        }
+        
+        $nodeInfo.show();
+    }
+    
+    // 填充模态框中的节点类型下拉列表
+    function populateModalNodeTypes() {
+        const $select = $('#modal-node-type');
+        $select.html('<option value="">-- 选择节点类型 --</option>'); // 重置
+        if (graphData && graphData.nodeTypes) {
+            graphData.nodeTypes.forEach(type => {
+                $select.append(`<option value="${type}">${type}</option>`);
+            });
+        }
+    }
+
+    // 根据选择的节点类型，填充模态框中的属性下拉列表
+    function populateModalAttributes(nodeType) {
+        const $select = $('#modal-property-name');
+        if (!nodeType || !graphData || !graphData.nodes) {
+            $select.html('<option value="">' + i18nHelper.t('kg_visualization.modal_select_node_type_first') + '</option>').prop('disabled', true);
+            return;
+        }
+
+        const attributes = new Set();
+        graphData.nodes.forEach(node => {
+            if (node.type === nodeType && node.attributes) {
+                Object.keys(node.attributes).forEach(attr => attributes.add(attr));
+            }
+        });
+
+        if (attributes.size > 0) {
+            $select.html('<option value="">' + i18nHelper.t('kg_visualization.modal_select_property') + '</option>'); // 清空旧选项
+            attributes.forEach(attr => {
+                $select.append(`<option value="${attr}">${attr}</option>`);
+            });
+            $select.prop('disabled', false);
+        } else {
+            $select.html('<option value="">' + i18nHelper.t('kg_visualization.modal_no_properties') + '</option>').prop('disabled', true);
+        }
+    }
+    
+    // 添加属性筛选条件
+    function addPropertyFilter() {
+        const nodeType = $('#modal-node-type').val();
+        const propertyName = $('#modal-property-name').val();
+        const operator = $('#modal-filter-operator').val();
+        const propertyValue = $('#modal-property-value').val();
+
+        // 基本验证
+        if (!nodeType || !propertyName || !operator || propertyValue === '') {
+             // 可以添加更友好的提示
+            alert(i18nHelper.t('kg_visualization.filter_condition_incomplete'));
+            return;
+        }
+
+        const newFilter = {
+            nodeType: nodeType,
+            propertyName: propertyName,
+            operator: operator,
+            value: propertyValue
+        };
+
+        activePropertyFilters.push(newFilter);
+        updateActiveFiltersDisplay();
+        $('#addFilterModal').modal('hide'); // 关闭模态框
+    }
+    
+    // 移除指定索引的属性筛选条件
+    function removePropertyFilter(index) {
+        if (index >= 0 && index < activePropertyFilters.length) {
+            activePropertyFilters.splice(index, 1);
+            updateActiveFiltersDisplay();
+            // 移除后可以考虑自动应用筛选，或者让用户手动点击"应用筛选"
+            // applyFilters(); // 可选：移除后立即应用
+        }
+    }
+
+    // 更新左侧活动筛选条件的显示
+    function updateActiveFiltersDisplay() {
+        const $container = $('#active-filters');
+        const $noFiltersMsg = $('#no-active-filters-msg');
+        $container.empty(); // 清空现有显示
+
+        if (activePropertyFilters.length === 0) {
+            $container.append($noFiltersMsg); // 显示提示信息
+            return;
+        }
+
+        activePropertyFilters.forEach((filter, index) => {
+            // 简单地将操作符转换为文本表示
+            let operatorText = filter.operator;
+            switch(filter.operator) {
+                case 'equals': operatorText = i18nHelper.t('kg_visualization.operator_equals'); break;
+                case 'contains': operatorText = i18nHelper.t('kg_visualization.operator_contains'); break;
+                case 'greater_than': operatorText = i18nHelper.t('kg_visualization.operator_greater_than'); break;
+                case 'less_than': operatorText = i18nHelper.t('kg_visualization.operator_less_than'); break;
+                case 'not_equals': operatorText = i18nHelper.t('kg_visualization.operator_not_equals'); break;
+            }
+            
+            const filterHtml = `
+                <div class="active-filter-item">
+                    <span>节点 <strong>${filter.nodeType}</strong> 的属性 <strong>${filter.propertyName}</strong> ${operatorText} "${filter.value}"</span>
+                    <button class="remove-filter-btn" data-index="${index}" title="移除此条件">&times;</button>
+                </div>
+            `;
+            $container.append(filterHtml);
+        });
+    }
+
+    // 应用筛选 (重写)
+    function applyFilters() {
+        if (!graphData) return;
+
+        console.log("应用筛选...");
+        console.log("当前属性筛选条件:", activePropertyFilters);
+
+        // 1. 获取选中的节点类型
+        const selectedNodeTypes = $('.node-type-checkbox:checked').map(function() {
+            return $(this).val();
+        }).get();
+
+        // 2. 获取选中的关系类型 (base types)
+        const selectedRelationshipTypes = $('.relationship-type-checkbox:checked').map(function() {
+            return $(this).val();
+        }).get();
+
+        // 3. 筛选节点
+        let filteredNodes = graphData.nodes.filter(node => {
+            // 3a. 按节点类型筛选
+            if (!selectedNodeTypes.includes(node.type)) {
+                return false;
+            }
+
+            // 3b. 按属性筛选 (应用所有 activePropertyFilters)
+            for (const filter of activePropertyFilters) {
+                 // 只有当节点类型匹配时，才应用该属性过滤器
+                if (node.type === filter.nodeType) {
+                    if (!node.attributes || !(filter.propertyName in node.attributes)) {
+                         return false; // 节点没有该属性，不满足条件
+                    }
+                    
+                    const nodeValue = String(node.attributes[filter.propertyName]); // 统一转为字符串比较
+                    const filterValue = String(filter.value);
+                    const nodeValueNum = parseFloat(nodeValue); // 尝试转为数字
+                    const filterValueNum = parseFloat(filterValue);
+
+                    switch (filter.operator) {
+                        case 'equals':
+                            if (nodeValue !== filterValue) return false;
+                            break;
+                        case 'contains':
+                            if (!nodeValue.toLowerCase().includes(filterValue.toLowerCase())) return false;
+                            break;
+                        case 'greater_than':
+                             if (isNaN(nodeValueNum) || isNaN(filterValueNum) || !(nodeValueNum > filterValueNum)) return false;
+                            break;
+                        case 'less_than':
+                             if (isNaN(nodeValueNum) || isNaN(filterValueNum) || !(nodeValueNum < filterValueNum)) return false;
+                            break;
+                        case 'not_equals':
+                            if (nodeValue === filterValue) return false;
+                            break;
+                        default: // 未知操作符，视为不满足
+                            console.warn("未知筛选操作符:", filter.operator);
+                            return false; 
+                    }
+                }
+            }
+            
+            // 如果通过了所有筛选，则保留该节点
+            return true;
+        });
+
+        // 4. 创建筛选后节点的 ID Map (用于快速查找和确定新索引)
+        const filteredNodeIdMap = new Map();
+        filteredNodes.forEach((node, index) => {
+            filteredNodeIdMap.set(node.id, index); // Map 原始ID -> 新索引
+        });
+
+        // 5. 筛选关系
+        let filteredLinks = graphData.links.filter(link => {
+            // Get original nodes using indices from graphData.links
+            const sourceNodeOriginal = graphData.nodes[link.source];
+            const targetNodeOriginal = graphData.nodes[link.target];
+
+            if (!sourceNodeOriginal || !targetNodeOriginal) return false; // Sanity check
+
+            const sourceId = sourceNodeOriginal.id;
+            const targetId = targetNodeOriginal.id;
+
+            // 检查: 关系类型是否选中 && 源节点和目标节点是否都在筛选后的节点集合中
+            return selectedRelationshipTypes.includes(link.type) && // link.type is base type
+                   filteredNodeIdMap.has(sourceId) &&
+                   filteredNodeIdMap.has(targetId);
+        }).map(link => {
+            // 映射到新的节点索引
+            const sourceNodeOriginal = graphData.nodes[link.source];
+            const targetNodeOriginal = graphData.nodes[link.target];
+            
+             if (!sourceNodeOriginal || !targetNodeOriginal) return null; // Should not happen if filter above worked
+
+            const sourceId = sourceNodeOriginal.id;
+            const targetId = targetNodeOriginal.id;
+
+            return {
+                ...link,
+                source: filteredNodeIdMap.get(sourceId), // Use new index
+                target: filteredNodeIdMap.get(targetId)  // Use new index
+            };
+        }).filter(link => link !== null); // 移除可能出现的null
+
+        console.log(`筛选后: ${filteredNodes.length}个节点, ${filteredLinks.length}个关系`);
+
+        // 6. 更新 filteredGraphData
+        filteredGraphData = {
+            nodeTypes: graphData.nodeTypes,
+            relationshipTypes: graphData.relationshipTypes,
+            nodes: filteredNodes.map((node, index) => ({ ...node, index: index })), // 确保索引正确
+            links: filteredLinks
+        };
+
+        // 7. 重新渲染
+        renderGraph();
+    }
+    
+    // 重置筛选 (修改)
+    function resetFilters() {
+        console.log("重置筛选...");
+        // Reset node type filters
+        $('.node-type-checkbox').prop('checked', true);
+
+        // Reset relationship type filters
+        $('.relationship-type-checkbox').prop('checked', true);
+
+        // 清空属性筛选条件
+        activePropertyFilters = [];
+        updateActiveFiltersDisplay(); // 更新显示
+
+        // 重置布局和大小等控件 (可选，根据需要决定是否重置)
+        // $('#layout-type').val('force');
+        // $('#node-size').val(15);
+        // $('#link-strength').val(0.5);
+
+        // 应用筛选（现在会显示完整图谱）
+        if (graphData) {
+             // 重新从原始数据开始，应用空的过滤器
+             filteredGraphData = JSON.parse(JSON.stringify(graphData));
+             applyFilters(); // applyFilters 会处理类型选择器和空的属性过滤器
+        }
+    }
+    
+    // 更新布局
+    function updateLayout() {
+        if (!simulation || !filteredGraphData) return;
+        
+        const layoutType = $('#layout-type').val();
+        const width = $('#graph-container').width();
+        const height = isFullscreen ? $(window).height() : 600; 
+        
+        // 先更新SVG尺寸以确保全屏状态下正确显示
+        if (svg) {
+            svg.attr('width', width)
+               .attr('height', height);
+        }
+        
+        // Update forces based on selected layout type
+        // Ensure we use the correct links data (filteredGraphData.links)
+        const currentLinks = filteredGraphData.links || [];
+        const currentNodes = filteredGraphData.nodes || [];
+
+        // Apply new forces
+        simulation
+            .force("link", d3.forceLink(currentLinks).id(d => d.index).distance(layoutType === 'force' ? 100 : 60).strength(parseFloat($('#link-strength').val() || 0.5)))
+             // --- 优化力模拟参数 ---
+            .force("charge", d3.forceManyBody().strength(layoutType === 'hierarchical' ? -300 : -150).distanceMax(layoutType === 'hierarchical' ? 500 : 300)) // 调整不同布局下的斥力
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collide", d3.forceCollide().radius(d => (d.nodeSize || 15) + 5)); // Use current node size
+
+        // Remove layout-specific forces before adding new ones
+        simulation.force('radial', null);
+        simulation.force('x', null);
+        simulation.force('y', null);
+
+        switch (layoutType) {
+            case 'circular':
+                 simulation.force('radial', d3.forceRadial(Math.min(width, height) / 2.5, width / 2, height / 2));
+                break;
+            case 'hierarchical':
+                 // Hierarchical layout needs a way to determine levels (e.g., based on node type or graph structure)
+                 // Using node type order as a simple proxy for level
+                 simulation
+                    .force('x', d3.forceX(width / 2).strength(0.05))
+                    .force('y', d3.forceY().strength(0.1).y(d => height * (getNodeLevel(d) / (graphData.nodeTypes.length + 1)) ));
+                break;
+            case 'force':
+                 // Default force layout forces are already set
+                break;
+        }
+        
+        // Restart simulation
+        simulation.alpha(1).restart();
+    }
+    
+    // Get node level for hierarchical layout (simple version based on type order)
+    function getNodeLevel(node) {
+        if (graphData && graphData.nodeTypes) {
+             const level = graphData.nodeTypes.indexOf(node.type);
+             return level >= 0 ? level + 1 : 1; // Default to level 1 if type not found
+        }
+        return 1; // Default level
+    }
+    
+    // Update node size
+    function updateNodeSize(size) {
+        const newSize = parseInt(size); 
+        
+        if (!nodeElements || !simulation) return;
+
+        // Update circle radius visually
+        nodeElements.selectAll('circle')
+            .transition() // Add smooth transition
+            .duration(150)
+            .attr('r', newSize);
+            
+        // Update node label position
+         nodeElements.selectAll('text')
+             .attr('dx', newSize + 2);
+
+        // Update nodeSize property in the bound data for collision and link adjustments
+        simulation.nodes().forEach(node => {
+            node.nodeSize = newSize;
+        });
+        
+        // Update collision force radius
+        simulation.force("collide").radius(d => (d.nodeSize || 15) + 5);
+        
+        // Gently restart simulation to reflect changes
+        simulation.alpha(0.1).restart(); 
+    }
+    
+    // Clear graph
+    function clearGraph() {
+        $('#graph-container').html('<div class="d-flex justify-content-center align-items-center h-100"><p>' + i18nHelper.t('js.please_select_graph_for_visualization') + '</p></div>');
+        $('#node-type-filters').empty();
+        $('#relationship-type-filters').empty();
+        $('#graph-legend').empty();
+        $('#node-info-panel').hide();
+        
+        if (simulation) {
+            simulation.stop();
+        }
+        
+        graphData = null;
+        filteredGraphData = null;
+        simulation = null;
+        svg = null;
+        nodeElements = null;
+        linkElements = null;
+        linkTextElements = null;
+        nodeColors = {};
+        linkColors = {};
+        activePropertyFilters = []; // 清空属性筛选数据
+    }
+    
+    // Show message
+    function showMessage(message, type = 'info') {
+        // Avoid multiple messages by removing existing ones first
+        $('#graph-container .alert').remove(); 
+        
+        const alertClass = type === 'error' ? 'alert-danger' : 'alert-info';
+        const $alert = $(`<div class="alert ${alertClass} alert-dismissible fade show m-2" role="alert" style="position: absolute; top: 0; left: 0; z-index: 10;">
+            ${message}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>`);
+        
+        $('#graph-container').prepend($alert);
+        
+        // Auto-close after 5 seconds (longer for warnings?)
+        const closeTimeout = (type === 'warning') ? 8000 : 5000;
+        setTimeout(() => {
+            $alert.alert('close');
+        }, closeTimeout);
+    }
+</script>
+{% endblock %} 

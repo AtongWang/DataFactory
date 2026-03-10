@@ -1,0 +1,1733 @@
+{% extends "layout.html" %}
+
+{% block title %}WisdominDATA - 知识图谱构建{% endblock %}
+
+{% block content %}
+<h1 class="page-title" data-i18n="kg_construction.title">知识图谱构建</h1>
+
+<div class="card">
+    <h2 class="card-title" data-i18n="kg_construction.select_data_source">1. 选择数据源</h2>
+    <div class="form-group">
+        <label for="database-select" class="form-label" data-i18n="kg_construction.select_database">选择数据库</label>
+        <select id="database-select" class="form-control">
+            <option value="" data-i18n="kg_construction.select_database_option">-- 选择数据库 --</option>
+            <!-- Dynamically loaded -->
+        </select>
+    </div>
+    
+    <div class="form-group">
+        <label for="table-select" class="form-label" data-i18n="kg_construction.select_table">选择表</label>
+        <select id="table-select" class="form-control" disabled>
+            <option value="" data-i18n="kg_construction.select_database_first">-- 先选择数据库 --</option>
+        </select>
+    </div>
+    
+    <div class="d-flex justify-content-start mt-3 mb-3"> <!-- Flex container -->
+        <button id="load-schema-btn" class="btn btn-primary mr-2" disabled data-i18n="kg_construction.load_schema">加载表结构</button> <!-- Added mr-2 for right margin -->
+        <button id="llm-suggest-btn" class="btn btn-info" disabled data-i18n="kg_construction.ai_auto_analysis">使用AI自动分析</button> <!-- Removed ml-2, margin handled by container/mr-2 -->
+    </div>
+</div>
+
+<div class="card" id="schema-card" style="display: none;">
+    <h2 class="card-title" data-i18n="kg_construction.table_schema">表结构</h2>
+    <div id="schema-container">
+        <!-- Schema loaded here -->
+    </div>
+</div>
+
+<div class="card" id="definition-card" style="display: none;">
+    <h2 class="card-title" data-i18n="kg_construction.define_entities">2. 定义实体（节点类型）</h2>
+    <div class="form-group">
+        <label class="form-label" data-i18n="kg_construction.entity_type_definition">实体类型定义</label>
+        <p class="form-text text-muted" data-i18n="kg_construction.entity_definition_help">从加载的表结构中选择列来定义实体类型。指定哪些列唯一标识实体（标识符列），哪些列是实体的属性（属性列）。</p>
+        <div id="node-types-container">
+            <!-- Node type rows added here -->
+        </div>
+        <button id="add-node-type-btn" class="btn btn-sm btn-secondary mt-2" data-i18n="kg_construction.add_entity_type">添加实体类型</button>
+    </div>
+    
+    <h2 class="card-title mt-4" data-i18n="kg_construction.define_relationships">3. 定义关系</h2>
+    <div class="form-group">
+        <label class="form-label" data-i18n="kg_construction.relationship_definition">关系定义</label>
+        <p class="form-text text-muted" data-i18n="kg_construction.relationship_definition_help">在已定义的实体类型之间建立关系，并指定匹配规则。</p>
+        <div id="relationships-container">
+            <!-- Relationship rows added here -->
+        </div>
+        <button id="add-relationship-btn" class="btn btn-sm btn-secondary mt-2" data-i18n="kg_construction.add_relationship">添加关系</button>
+    </div>
+</div>
+
+<!-- Removed the separate construction options card -->
+<div class="card" id="build-action-card" style="display: none;">
+     <h2 class="card-title" data-i18n="kg_construction.build_graph_title">4. 构建知识图谱</h2>
+    <div class="form-group">
+        <label for="graph-name" class="form-label" data-i18n="kg_construction.graph_name">知识图谱名称</label>
+         <input type="text" id="graph-name" class="form-control" data-i18n-placeholder="kg_construction.graph_name_input_placeholder" placeholder="输入新知识图谱的名称">
+    </div>
+    <button id="build-graph-btn" class="btn btn-primary" data-i18n="kg_construction.build_graph_button">构建知识图谱</button>
+</div>
+
+
+<div class="card">
+    <h2 class="card-title" data-i18n="kg_construction.existing_graphs">已构建的知识图谱</h2>
+    <div id="existing-graphs">
+                    <p data-i18n="common.loading">加载中...</p>
+        <!-- Existing graphs loaded here -->
+    </div>
+</div>
+{% endblock %}
+
+{% block additional_scripts %}
+<style>
+/* 知识图谱规则条件样式 */
+.rule-group {
+    border-left: 3px solid #007bff !important;
+    margin-left: 10px;
+    position: relative;
+}
+.rule-group:before {
+    content: "(";
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+    color: #007bff;
+    font-weight: bold;
+}
+.rule-group:after {
+    content: ")";
+    position: absolute;
+    right: -5px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+    color: #007bff;
+    font-weight: bold;
+}
+.group-conditions-list {
+    padding-left: 10px;
+}
+.rule-condition-row {
+    transition: background-color 0.3s;
+}
+.rule-condition-row:hover {
+    background-color: rgba(0,0,0,0.03);
+}
+
+/* Improved styles for rule editor elements */
+.rule-editor-area {
+    line-height: 2.5; /* Adjust as needed for vertical spacing */
+}
+.rule-text-element,
+.rule-condition-block,
+.rule-semantic-block,
+.rule-inter-entity-block { /* Added inter entity block */
+    display: inline-flex; /* Align items vertically */
+    align-items: center; /* Center items vertically */
+    margin: 2px 4px; /* Spacing around elements */
+    padding: 3px 8px; /* Padding inside elements */
+    border-radius: 10px; /* Rounded corners */
+    vertical-align: middle; /* Align with surrounding text */
+}
+
+.rule-text-element {
+    background-color: #f8f9fa; /* Light background for text elements */
+    border: 1px solid #dee2e6;
+}
+
+.rule-condition-block {
+    background-color: #e2f3ff; /* Light blue for condition blocks */
+    border: 1px solid #b8e0ff;
+    cursor: pointer; /* Indicate clickable for editing */
+}
+
+.rule-semantic-block { /* Style for semantic block */
+    background-color: #d1ecf1; /* Light cyan/info color */
+    border: 1px solid #bee5eb;
+    cursor: pointer; /* Indicate clickable for editing */
+}
+
+.rule-inter-entity-block { /* Style for inter entity compare block */
+    background-color: #ffeaa7; /* Light yellow/warning color */
+    border: 1px solid #fdcb6e;
+    cursor: pointer; /* Indicate clickable for editing */
+}
+
+
+.remove-element-btn {
+    display: inline-flex; /* Use flex to center the icon */
+    justify-content: center;
+    align-items: center;
+    width: 16px;
+    height: 16px;
+    margin-left: 6px; /* Space between text/block and button */
+    font-size: 10px; /* Size of the 'x' icon */
+    font-weight: bold;
+    color: #dc3545; /* Red color for delete */
+    background-color: #f8d7da; /* Light red background */
+    border: 1px solid #f5c6cb;
+    border-radius: 50%; /* Make it circular */
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s, background-color 0.2s;
+}
+
+.remove-element-btn:hover {
+    opacity: 1;
+    background-color: #f5c6cb; /* Darker red on hover */
+}
+
+.remove-element-btn span {
+    line-height: 1; /* Ensure 'x' is centered */
+}
+
+/* 新增: 多选复选框容器样式 */
+.multiselect-checkbox-container {
+    height: 100px; /* Or adjust as needed */
+    overflow-y: auto;
+    border: 1px solid #ced4da; /* Mimic form-control border */
+    padding: 0.375rem 0.75rem; /* Mimic form-control padding */
+    border-radius: 0.25rem; /* Mimic form-control border-radius */
+    background-color: #fff; /* Background color */
+}
+.multiselect-checkbox-container .form-check {
+    margin-bottom: 0.3rem; /* Spacing between checkboxes */
+}
+.multiselect-checkbox-container .form-check-label {
+    font-size: 0.875rem; /* Slightly smaller label */
+    margin-left: 0.25rem;
+}
+
+/* Style for condition editor form sections */
+.condition-form-rule-section,
+.condition-form-semantic-section {
+     display: none; /* Hide by default */
+}
+
+/* 强制设置参考数据删除按钮为红色 */
+.delete-training-item-btn {
+    background-color: #dc3545 !important; /* 使用 Bootstrap 的危险红色 */
+    border-color: #dc3545 !important;
+    color: white !important; /* 确保文字和图标是白色 */
+}
+
+.delete-training-item-btn:hover {
+    background-color: #c82333 !important; /* 悬停时加深红色 */
+    border-color: #bd2130 !important;
+    color: white !important;
+}
+
+</style>
+
+<script>
+    // ==============================================
+    //  函数定义区域 (移到 $(document).ready 外部)
+    // ==============================================
+
+    // --- Data Loading Functions ---
+    function loadDatabases() {
+        console.log("正在从配置中获取数据库信息...");
+        // 从后端获取数据库配置而不是硬编码
+        fetch('/api/kg/database-config')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('获取数据库配置失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    const databaseName = data.database_name;
+                    console.log(`使用配置中的数据库: ${databaseName}`);
+                    $('#database-select').html(`<option value="${databaseName}" selected>${databaseName}</option>`);
+                    loadTables(databaseName);
+                } else {
+                    throw new Error(data.message || '获取数据库配置失败');
+                }
+            })
+            .catch(error => {
+                console.error('获取数据库配置失败:', error);
+                // 降级处理：使用默认值但给出警告
+                const fallbackName = "evaluation_test_db";
+                console.warn(`使用默认数据库: ${fallbackName}`);
+                $('#database-select').html(`<option value="${fallbackName}" selected>${fallbackName}</option>`);
+                loadTables(fallbackName);
+            });
+    }
+
+    function loadTables(database) {
+        console.log(`正在加载数据库表: ${database}`);
+        const loadingText = window.i18nHelper ? window.i18nHelper.t('common.loading') : '加载中...';
+        $('#table-select').html(`<option value="">${loadingText}</option>`).prop('disabled', true);
+        fetch('/api/kg/database-tables')
+            .then(response => { if (!response.ok) { throw new Error('获取数据库表失败'); } return response.json(); })
+            .then(data => {
+                if (data.status === 'success') {
+                    const tables = data.tables || [];
+                    if (tables.length === 0) { $('#table-select').html('<option value="">-- 未找到表 --</option>'); $('#load-schema-btn').prop('disabled', true); return; }
+                    let optionsHTML = '<option value="">-- 选择表 --</option>';
+                    tables.forEach(table => { optionsHTML += `<option value="${table}">${table}</option>`; });
+                    $('#table-select').html(optionsHTML).prop('disabled', false);
+                    console.log(`加载了 ${tables.length} 个表`);
+                } else { throw new Error(data.message || '未知错误'); }
+            })
+            .catch(error => { 
+            console.error('获取表列表失败:', error); 
+            const loadFailedText = window.i18nHelper ? window.i18nHelper.t('kg_construction.load_failed') : '-- 加载失败 --';
+            $('#table-select').html(`<option value="">${loadFailedText}</option>`); 
+            const errorMsg = window.i18nHelper ? window.i18nHelper.t('kg_construction.load_tables_failed') : '获取表列表失败';
+            alert(`${errorMsg}: ${error.message}`); 
+        });
+    }
+
+    function loadTableSchema(database, table, isAISuggestionContext = false) { // Added isAISuggestionContext
+        console.log(`正在加载表结构: ${database}.${table}${isAISuggestionContext ? ' (AI Suggest Context)' : ''}`);
+        $('#schema-card').show();
+        const loadingText = window.i18nHelper ? window.i18nHelper.t('common.loading') : '加载中...';
+        $('#schema-container').html(`<p>${loadingText}</p>`);
+        $('#node-types-container, #relationships-container').empty(); // 重置定义
+        fetch(`/api/kg/table-schema?table=${encodeURIComponent(table)}`)
+            .then(response => { if (!response.ok) { throw new Error('获取表结构失败'); } return response.json(); })
+            .then(data => {
+                if (data.status === 'success') {
+                    const columns = data.schema || [];
+                    if (columns.length === 0) { 
+                        const noColumnsText = window.i18nHelper ? window.i18nHelper.t('kg_construction.no_columns_info') : '该表没有列信息';
+                        $('#schema-container').html(`<p>${noColumnsText}</p>`); 
+                        return; 
+                    }
+                    const columnNameText = window.i18nHelper ? window.i18nHelper.t('kg_construction.column_name_header') : '列名';
+                    const typeText = window.i18nHelper ? window.i18nHelper.t('kg_construction.type_header') : '类型';
+                    const primaryKeyText = window.i18nHelper ? window.i18nHelper.t('kg_construction.primary_key_header') : '主键';
+                    const yesText = window.i18nHelper ? window.i18nHelper.t('common.yes') : '是';
+                    const noText = window.i18nHelper ? window.i18nHelper.t('common.no') : '否';
+                    
+                    let schemaHTML = `
+                        <table class="table table-bordered table-sm" id="schema-table">
+                            <thead class="thead-light">
+                                <tr><th>${columnNameText}</th><th>${typeText}</th><th>${primaryKeyText}</th></tr>
+                            </thead>
+                            <tbody>
+                                ${columns.map(col => `<tr data-column-name="${col.name}"><td>${col.name}</td><td>${col.type}</td><td>${col.primary_key ? `<span class="badge badge-success">${yesText}</span>` : noText}</td></tr>`).join('')}
+                            </tbody>
+                        </table>`;
+                    $('#schema-container').html(schemaHTML);
+                    $('#definition-card, #build-action-card').show();
+                    
+                    if (!isAISuggestionContext) { // Conditionally add initial rows
+                        addNodeTypeRow(columns); 
+                        addRelationshipRow(columns); 
+                    }
+                    console.log("表结构加载完成");
+                } else { throw new Error(data.message || '未知错误'); }
+            })
+            .catch(error => { 
+                console.error('获取表结构失败:', error);
+                 // Display error in a more user-friendly way if possible
+                $('#schema-container').html(`<p class="text-danger">获取表结构失败: ${error.message}</p>`);
+                 alert(`获取表结构失败: ${error.message}`); // Also keep alert for immediate feedback
+                 // Hide definition sections if schema load failed
+                 $('#definition-card, #build-action-card').hide();
+            });
+    }
+
+    function loadExistingGraphs() {
+        console.log("正在加载已有知识图谱...");
+        $('#existing-graphs').html('<p>加载中...</p>');
+        fetch('/api/kg/graphs')
+            .then(response => { if (!response.ok) { throw new Error('获取知识图谱列表失败'); } return response.json(); })
+            .then(data => {
+                if (data.status === 'success') {
+                    const graphs = data.graphs || [];
+                    if (graphs.length === 0) { 
+                        const noGraphsText = window.i18nHelper ? window.i18nHelper.t('kg_construction.no_graphs') : '暂无知识图谱';
+                        $('#existing-graphs').html(`<p>${noGraphsText}</p>`); 
+                        return; 
+                    }
+                    const graphsHTML = `
+                        <table class="table table-sm">
+                            <thead><tr><th data-i18n="kg_construction.table_name">名称</th><th data-i18n="kg_construction.table_data_source">数据源</th><th data-i18n="kg_construction.table_node_count">节点数</th><th data-i18n="kg_construction.table_relationship_count">关系数</th><th data-i18n="kg_construction.table_status">状态</th><th data-i18n="kg_construction.table_created_time">创建时间</th><th data-i18n="kg_construction.table_actions">操作</th></tr></thead>
+                            <tbody>
+                                ${graphs.map(graph => `
+                                    <tr>
+                                        <td>${graph.name}</td><td>${graph.table}</td><td>${graph.node_count}</td><td>${graph.relationship_count}</td>
+                                        <td>${getStatusBadge(graph.status)}</td><td>${formatDate(graph.created_at)}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-info rebuild-graph-btn" data-id="${graph.id}" data-i18n="kg_construction.table_rebuild">重建</button>
+                                            <button class="btn btn-sm btn-danger delete-training-item-btn delete-graph-btn" data-id="${graph.id}" data-i18n="kg_construction.table_delete">删除</button>
+                                        </td>
+                                    </tr>`).join('')}
+                            </tbody>
+                        </table>`;
+                    $('#existing-graphs').html(graphsHTML);
+                    // Bind events after adding elements to DOM - best placed inside $(document).ready or delegated
+                    // Moving these bindings inside .ready()
+                    console.log(`加载了 ${graphs.length} 个知识图谱`);
+                } else { throw new Error(data.message || '未知错误'); }
+            })
+            .catch(error => { console.error('获取知识图谱列表失败:', error); $('#existing-graphs').html(`<p class="text-danger">获取知识图谱列表失败: ${error.message}</p>`); });
+    }
+
+    function getStatusBadge(status) {
+        const statusMap = {
+            'created': { key: 'kg_construction.status_created', color: '#6c757d' },
+            'building': { key: 'kg_construction.status_building', color: '#ffc107' },
+            'completed': { key: 'kg_construction.status_completed', color: '#28a745' },
+            'failed': { key: 'kg_construction.status_failed', color: '#dc3545' }
+        };
+        
+        if (statusMap[status]) {
+            const config = statusMap[status];
+            const text = window.i18nHelper ? window.i18nHelper.t(config.key) : status;
+            return `<span style="color: ${config.color}; font-weight: bold;">${text}</span>`;
+        }
+        return `<span style="color: #6c757d;">${status}</span>`;
+    }
+
+    function formatDate(dateString) {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function deleteGraph(graphId) {
+        if (!confirm(`确定要删除知识图谱 #${graphId} 吗？此操作不可恢复。`)) return;
+        console.log(`正在删除知识图谱 #${graphId}...`);
+        fetch(`/api/kg/graphs/${graphId}`, { method: 'DELETE' })
+        .then(response => { if (!response.ok) { throw new Error('删除知识图谱失败'); } return response.json(); })
+        .then(data => { if (data.status === 'success') { alert(data.message || '知识图谱已删除'); loadExistingGraphs(); } else { throw new Error(data.message || '未知错误'); } })
+        .catch(error => { console.error('删除知识图谱失败:', error); alert(`删除知识图谱失败: ${error.message}`); });
+    }
+
+    function rebuildGraph(graphId) {
+        if (!confirm(`确定要重新构建知识图谱 #${graphId} 吗？`)) return;
+        console.log(`正在重建知识图谱 #${graphId}...`);
+        fetch(`/api/kg/graphs/${graphId}/rebuild`, { method: 'POST' })
+        .then(response => { if (!response.ok) { throw new Error('重建知识图谱失败'); } return response.json(); })
+        .then(data => { if (data.status === 'success') { alert(data.message || '知识图谱重建任务已启动'); loadExistingGraphs(); } else { throw new Error(data.message || '未知错误'); } })
+        .catch(error => { console.error('重建知识图谱失败:', error); alert(`重建知识图谱失败: ${error.message}`); });
+    }
+
+    // --- UI Generation Functions ---
+    function getCurrentSchemaColumns() {
+        const columns = [];
+        // Ensure table exists before querying
+        const $schemaTable = $('#schema-table');
+        if ($schemaTable.length) {
+             $schemaTable.find('tbody tr').each(function() {
+                 columns.push({ name: $(this).data('column-name') });
+             });
+        }
+        return columns;
+    }
+    
+    function getColumnCheckboxListHTML(columns, baseId, purpose, listClass = '') {
+        if (!columns || columns.length === 0) {
+            const noColumnsText = window.i18nHelper ? window.i18nHelper.t('kg_construction.no_available_columns') : '无可用列';
+            return `<p class="text-muted small m-1">${noColumnsText}</p>`;
+        }
+        return columns.map((col, index) => `
+            <div class="form-check">
+                <input class="form-check-input ${listClass}" type="checkbox" value="${col.name}" id="chk-${baseId}-${purpose}-${index}">
+                <label class="form-check-label" for="chk-${baseId}-${purpose}-${index}">
+                    ${col.name}
+                </label>
+            </div>
+        `).join('');
+    }
+    
+    function getSelectedCheckboxValues($container) {
+        const values = [];
+        $container.find('.form-check-input:checked').each(function() {
+            values.push($(this).val());
+        });
+        return values;
+    }
+    
+    function getColumnRadioListHTML(columns, baseId, purpose, radioGroupName) {
+        if (!columns || columns.length === 0) {
+            const noColumnsText = window.i18nHelper ? window.i18nHelper.t('kg_construction.no_available_columns') : '无可用列';
+            return `<p class="text-muted small m-1">${noColumnsText}</p>`;
+        }
+        const groupName = `identifier-radio-group-${baseId}`;
+        return columns.map((col, index) => `
+            <div class="form-check">
+                <input class="form-check-input node-type-identifier-radio" type="radio" name="${groupName}" value="${col.name}" id="radio-${baseId}-id-${index}">
+                <label class="form-check-label" for="radio-${baseId}-id-${index}">
+                    ${col.name}
+                </label>
+            </div>
+        `).join('');
+    }
+    
+    function getSelectedRadioValue($container) {
+        const selectedRadio = $container.find('.form-check-input:checked');
+        return selectedRadio.length > 0 ? selectedRadio.val() : null;
+    }
+    
+    function getColumnOptionsHTML(columns, includeEmpty = false) {
+         let options = includeEmpty ? '<option value="">-- 选择列 --</option>' : '';
+         options += columns.map(col => `<option value="${col.name}">${col.name}</option>`).join('');
+         return options;
+    }
+
+    function addNodeTypeRow(columns) {
+        const rowId = `node-type-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        const identifierRadiosHTML = getColumnRadioListHTML(columns, rowId, 'id');
+        const attributeCheckboxesHTML = getColumnCheckboxListHTML(columns, rowId, 'attr', 'node-type-attribute-checkbox');
+
+        const nodeTypeRowHTML = `
+            <div class="node-type-row border p-3 mb-3 bg-light rounded" id="${rowId}">
+                <div class="row mb-2">
+                    <div class="col-md-5">
+                        <label for="${rowId}-name" class="form-label small mb-1" data-i18n="kg_construction.entity_type_name">实体类型名称</label>
+                        <input type="text" id="${rowId}-name" class="form-control form-control-sm node-type-name" data-i18n-placeholder="kg_construction.entity_type_name_placeholder" placeholder="例如：装备、单位">
+                    </div>
+                    <div class="col-md-7 d-flex align-items-end justify-content-end">
+                         <button class="btn btn-sm btn-outline-danger remove-node-type-btn" data-i18n="kg_construction.delete_entity_type">删除此实体类型</button>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1" data-i18n="kg_construction.identifier_column">标识符列 (单选，唯一识别)</label>
+                        <div class="multiselect-checkbox-container node-type-identifier-column-container">
+                            ${identifierRadiosHTML}
+                        </div>
+                        <small class="form-text text-muted" data-i18n="kg_construction.identifier_column_help">选择唯一确定实体的一列。</small>
+                        <div class="mt-2 split-config-section" style="display: none;">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input split-enabled-switch" type="checkbox" role="switch" id="${rowId}-split-enable">
+                                <label class="form-check-label small" for="${rowId}-split-enable" data-i18n="kg_construction.enable_split">启用分隔符拆分</label>
+                            </div>
+                            <div class="input-group input-group-sm mt-1 split-delimiter-input" style="display: none;">
+                                <span class="input-group-text" data-i18n="kg_construction.delimiter">分隔符</span>
+                                <input type="text" class="form-control form-control-sm split-delimiter" data-i18n-placeholder="kg_construction.delimiter_placeholder" placeholder="例如：, 或 、 或 ;" value=",">
+                                <div class="input-group-append">
+                                     <span class="input-group-text">
+                                         <i class="fas fa-info-circle" data-i18n-title="kg_construction.delimiter_tooltip" title="指定用于拆分标识符列值的字符，如逗号(,)、顿号(、)、分号(;)。"></i>
+                                     </span>
+                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1" data-i18n="kg_construction.attribute_column">属性列 (可选特征)</label>
+                         <div class="multiselect-checkbox-container node-type-attribute-column-container">
+                            ${attributeCheckboxesHTML}
+                        </div>
+                         <small class="form-text text-muted" data-i18n="kg_construction.attribute_column_help">选择描述实体特征的其它列。</small>
+                    </div>
+                </div>
+            </div>`;
+        const $newRow = $(nodeTypeRowHTML);
+        $('#node-types-container').append($newRow);
+        updateRelationshipNodeTypes(); 
+        return $newRow; // 返回新创建的行
+    }
+
+    function addRelationshipRow(columns) {
+         const nodeTypeOptionsHTML = getNodeTypeOptionsHTML(true);
+         const rowId = `rel-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+         const editorId = `rule-editor-${rowId}`;
+         const groupingCheckboxesHTML = getColumnCheckboxListHTML(columns, rowId, 'grouping', 'grouping-columns-checkbox');
+         const semanticCheckboxesHTML = getColumnCheckboxListHTML(columns, rowId, 'semantic', 'semantic-columns-checkbox'); // Reuse for semantic form
+         const ruleEditorHTML = `
+             <div class="rule-based-conditions"> <!-- Removed style="display: block;" -->
+                 <h6 data-i18n="kg_construction.condition_editor">匹配条件编辑器</h6>
+                 <div class="rule-editor-toolbar btn-toolbar mb-2" role="toolbar">
+                     <div class="btn-group mr-2" role="group">
+                         <button type="button" class="btn btn-sm btn-outline-secondary insert-rule-element-btn" data-element="(">(</button>
+                         <button type="button" class="btn btn-sm btn-outline-secondary insert-rule-element-btn" data-element=")">)</button>
+                     </div>
+                     <div class="btn-group mr-2" role="group">
+                         <button type="button" class="btn btn-sm btn-outline-primary insert-rule-element-btn" data-element="AND">AND</button>
+                         <button type="button" class="btn btn-sm btn-outline-primary insert-rule-element-btn" data-element="OR">OR</button>
+                     </div>
+                     <div class="btn-group" role="group">
+                         <button type="button" class="btn btn-sm btn-outline-success add-condition-block-btn" data-type="rule" data-i18n="kg_construction.add_rule_condition">添加规则条件 [+ Rule]</button>
+                         <button type="button" class="btn btn-sm btn-outline-info add-condition-block-btn" data-type="semantic" data-i18n="kg_construction.add_semantic_condition">添加语义条件 [+ Semantic]</button>
+                         <button type="button" class="btn btn-sm btn-outline-warning add-condition-block-btn" data-type="inter_entity_compare" data-i18n="kg_construction.add_inter_entity_compare">实体间比较 [+ Inter]</button>
+                     </div>
+                 </div>
+                 <!-- Condition Editor Form (Unified) -->
+                 <div class="condition-editor-form border p-2 mb-2 rounded bg-light" style="display: none;">
+                     <input type="hidden" class="editing-block-id">
+                     <input type="hidden" class="editing-block-type"> <!-- To store 'rule' or 'semantic' -->
+                     
+                     <!-- Rule Section -->
+                     <div class="condition-form-rule-section">
+                         <div class="form-row align-items-end">
+                             <div class="col-md-2 mb-1"><label class="small mb-0" data-i18n="kg_construction.entity">实体</label><select class="form-control form-control-sm condition-entity-type"><option value="source" selected data-i18n="kg_construction.source_entity">源实体</option><option value="target" data-i18n="kg_construction.target_entity">目标实体</option></select></div>
+                             <div class="col-md-3 mb-1"><label class="small mb-0" data-i18n="kg_construction.column_name">列名</label><select class="form-control form-control-sm condition-column"></select></div>
+                             <div class="col-md-3 mb-1"><label class="small mb-0" data-i18n="kg_construction.operator">操作符</label><select class="form-control form-control-sm condition-operator"></select></div>
+                             <div class="col-md-3 mb-1 condition-value-wrapper"><label class="small mb-0" data-i18n="kg_construction.value">值</label><input type="text" class="form-control form-control-sm condition-value" data-i18n-placeholder="kg_construction.condition_value_placeholder" placeholder="条件值"><small class="form-text text-muted condition-value-hint" style="display:none; font-size: 0.75rem;" data-i18n="kg_construction.in_operator_hint">对于 IN / NOT IN, 使用逗号分隔值。</small></div>
+                         </div>
+                     </div>
+
+                     <!-- Semantic Section -->
+                     <div class="condition-form-semantic-section">
+                         <div class="row mb-2">
+                             <div class="col-md-6">
+                                 <label class="form-label small mb-1" data-i18n="kg_construction.semantic_columns">用于语义匹配的列</label>
+                                 <div class="multiselect-checkbox-container semantic-columns-select-container">
+                                     ${semanticCheckboxesHTML} 
+                                 </div>
+                                 <small class="form-text text-muted" data-i18n="kg_construction.semantic_columns_help">选择一或多列，其组合值将用于相似度计算。</small>
+                             </div>
+                             <div class="col-md-6">
+                                 <label for="${rowId}-threshold-edit" class="form-label small mb-1" data-i18n="kg_construction.similarity_threshold">相似度阈值: <span class="threshold-value-display">0.7</span></label>
+                                 <input type="range" id="${rowId}-threshold-edit" class="form-control-range similarity-threshold-slider" min="0" max="1" step="0.01" value="0.7">
+                             </div>
+                         </div>
+                     </div>
+                     
+                     <!-- Inter Entity Compare Section -->
+                     <div class="condition-form-inter-entity-section">
+                         <div class="form-row align-items-end">
+                             <div class="col-md-3 mb-1"><label class="small mb-0" data-i18n="kg_construction.source_entity_column">源实体列</label><select class="form-control form-control-sm condition-source-column"></select></div>
+                             <div class="col-md-3 mb-1"><label class="small mb-0" data-i18n="kg_construction.operator">操作符</label><select class="form-control form-control-sm condition-inter-operator"></select></div>
+                             <div class="col-md-3 mb-1"><label class="small mb-0" data-i18n="kg_construction.target_entity_column">目标实体列</label><select class="form-control form-control-sm condition-target-column"></select></div>
+                             <div class="col-md-3 mb-1"><small class="form-text text-muted" data-i18n="kg_construction.compare_entity_columns_help">比较两个实体的列值</small></div>
+                         </div>
+                     </div>
+                     
+                     <!-- Common Buttons -->
+                     <div class="form-row">
+                         <div class="col-md-12 text-right">
+                            <button type="button" class="btn btn-sm btn-primary save-condition-btn" data-i18n="kg_construction.save">✓ 保存</button>
+                            <button type="button" class="btn btn-sm btn-secondary cancel-condition-btn" data-i18n="kg_construction.cancel">✗ 取消</button>
+                        </div>
+                    </div>
+                 </div>
+                 <!-- Editor Area -->
+                 <div id="${editorId}" class="rule-editor-area border p-2 rounded bg-white" style="min-height: 50px; line-height: 2.5;"></div>
+                 <small class="form-text text-muted" data-i18n="kg_construction.editor_help">使用按钮构建逻辑表达式。点击元素可删除，点击条件块可编辑。可拖动排序。</small>
+             </div>
+         `;
+        
+        const relationshipRowHTML = `
+        <div class="relationship-row border p-3 mb-3 bg-light rounded" id="${rowId}">
+            <div class="row mb-2">
+                    <div class="col-md-3">
+                    <label for="${rowId}-source" class="form-label small mb-1" data-i18n="kg_construction.source_entity_type">源实体类型</label>
+                    <select id="${rowId}-source" class="form-control form-control-sm source-node-type">
+                        ${nodeTypeOptionsHTML}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                    <label for="${rowId}-type" class="form-label small mb-1" data-i18n="kg_construction.relationship_type_name">关系类型名称</label>
+                    <input type="text" id="${rowId}-type" class="form-control form-control-sm relationship-type" data-i18n-placeholder="kg_construction.relationship_type_placeholder" placeholder="例如: 属于, 替代, 位于">
+                </div>
+                 <div class="col-md-3">
+                    <label for="${rowId}-target" class="form-label small mb-1" data-i18n="kg_construction.target_entity_type">目标实体类型</label>
+                    <select id="${rowId}-target" class="form-control form-control-sm target-node-type">
+                        ${nodeTypeOptionsHTML}
+                    </select>
+                    </div>
+                    <div class="col-md-3">
+                    <label for="${rowId}-direction" class="form-label small mb-1" data-i18n="kg_construction.relationship_direction">关系方向</label>
+                    <select id="${rowId}-direction" class="form-control form-control-sm relationship-direction">
+                        <option value="uni" data-i18n="kg_construction.unidirectional">单向 (源 → 目标)</option>
+                        <option value="bi" data-i18n="kg_construction.bidirectional">双向 (源 ↔ 目标)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-4">
+                     <label for="${rowId}-matching" class="form-label small mb-1" data-i18n="kg_construction.entity_matching_mode">实体匹配模式</label>
+                     <select id="${rowId}-matching" class="form-control form-control-sm matching-mode-select">
+                         <option value="intra-row" selected data-i18n="kg_construction.intra_row_matching">同行匹配 (默认)</option>
+                         <option value="inter-row" data-i18n="kg_construction.inter_row_matching">跨行匹配 (高级)</option>
+                     </select>
+                     <small class="form-text text-muted" data-i18n="kg_construction.entity_matching_mode_help">如何查找相关的源/目标实体</small>
+                 </div>
+                 <div class="col-md-8 d-flex align-items-end justify-content-end">
+                     <button class="btn btn-sm btn-outline-danger remove-relationship-btn" data-i18n="kg_construction.delete_relationship">删除此关系定义</button>
+                 </div>
+            </div>
+            <div class="inter-row-options border p-3 mt-2 rounded bg-white" style="display: none;">
+                 <h5 data-i18n="kg_construction.inter_row_options">跨行匹配选项</h5>
+                 <div class="row mb-2">
+                     <div class="col-md-12">
+                         <label class="form-label small mb-1" data-i18n="kg_construction.grouping_columns">分组列（可选）</label>
+                          <div class="multiselect-checkbox-container grouping-columns-select-container">
+                             ${groupingCheckboxesHTML}
+                          </div>
+                         <small class="form-text text-muted" data-i18n="kg_construction.grouping_columns_help">可选择列进行分组，在这些列值都相同的行之间查找关系。如不选择则在全表范围内匹配。</small>
+                     </div>
+                 </div>
+                 <!-- Removed condition method select -->
+                 ${ruleEditorHTML} 
+                 <!-- Removed separate semantic-based-conditions -->
+            </div>
+        </div>`; 
+        const $newRow = $(relationshipRowHTML);
+        $('#relationships-container').append($newRow);
+
+        // 初始化 SortableJS 以实现拖拽排序
+        const editorElement = document.getElementById(editorId); // 获取原始 DOM 元素
+        if (editorElement && typeof Sortable !== 'undefined') { // 确保 SortableJS 已加载
+            new Sortable(editorElement, {
+                animation: 150, // 拖动动画时长 (ms)
+                draggable: '.rule-text-element, .rule-condition-block, .rule-semantic-block, .rule-inter-entity-block', // 添加 inter entity block
+                filter: '.remove-element-btn', // 防止点击删除按钮时触发拖动
+                onEnd: function (evt) {
+                    // 拖动结束后，DOM 顺序已经改变
+                    console.log('规则元素顺序已调整。');
+                }
+            });
+            console.log(`SortableJS initialized for editor: ${editorId}`);
+        } else if (typeof Sortable === 'undefined') {
+             console.warn("SortableJS 未加载，无法初始化拖拽功能。");
+        }
+        return $newRow; // 返回新创建的行
+    }
+
+    // --- Helper Functions for New Rule Editor ---
+    // Modified resetAndPrepareConditionForm
+    function resetAndPrepareConditionForm($form, columns, conditionType = 'rule', existingData = null) {
+        $form.find('.editing-block-id').val('');
+        $form.find('.editing-block-type').val(conditionType); // Store the type
+
+        // Reset common fields
+        $form.find('select, input[type="text"], input[type="range"]').val('');
+        $form.find('input[type="checkbox"]').prop('checked', false);
+
+        // Show/Hide sections based on type
+        $form.find('.condition-form-rule-section').toggle(conditionType === 'rule');
+        $form.find('.condition-form-semantic-section').toggle(conditionType === 'semantic');
+        $form.find('.condition-form-inter-entity-section').toggle(conditionType === 'inter_entity_compare');
+
+        if (conditionType === 'rule') {
+            // Populate Rule fields
+            const columnsOptionsHTML = getColumnOptionsHTML(columns, true); 
+            const operators = [ { value: '==', text: '=' }, { value: '!=', text: '!=' }, { value: '>', text: '>' }, { value: '<', text: '<' }, { value: '>=', text: '>=' }, { value: '<=', text: '<=' }, { value: 'in', text: 'IN (逗号分隔)' }, { value: 'not_in', text: 'NOT IN (逗号分隔)' }, { value: 'contains', text: '包含 (文本)' }, { value: 'starts_with', text: '开头是 (文本)' }, { value: 'ends_with', text: '结尾是 (文本)' }, { value: 'is_null', text: '为空'}, { value: 'is_not_null', text: '不为空'} ];
+            const operatorOptionsHTML = operators.map(op => `<option value="${op.value}">${op.text}</option>`).join('');
+            $form.find('.condition-column').html(columnsOptionsHTML); 
+            $form.find('.condition-operator').html(operatorOptionsHTML);
+            
+            // Set existing data if provided
+            $form.find('.condition-entity-type').val(existingData?.entity_type || 'source'); 
+            $form.find('.condition-column').val(existingData?.column || ''); 
+            $form.find('.condition-operator').val(existingData?.operator || '=='); 
+            $form.find('.condition-value').val(existingData?.value || ''); 
+            $form.find('.condition-operator').trigger('change'); // Trigger change to set initial state of value input
+        } else if (conditionType === 'semantic') { // Semantic type
+            // Populate Semantic fields
+            const semanticColsHTML = getColumnCheckboxListHTML(columns, $form.attr('id') || 'temp', 'semantic-edit'); // Ensure unique IDs
+             $form.find('.condition-form-semantic-section .semantic-columns-select-container').html(semanticColsHTML);
+
+            // Set existing data if provided
+            const threshold = existingData?.threshold || 0.7;
+            $form.find('.similarity-threshold-slider').val(threshold);
+            $form.find('.threshold-value-display').text(threshold);
+            if (existingData?.columns) {
+                existingData.columns.forEach(colName => {
+                    $form.find(`.semantic-columns-select-container input[value="${colName}"]`).prop('checked', true);
+                });
+            }
+        } else if (conditionType === 'inter_entity_compare') { // Inter Entity Compare type
+            // Populate Inter Entity Compare fields
+            const columnsOptionsHTML = getColumnOptionsHTML(columns, true);
+            const operators = [ { value: '==', text: '=' }, { value: '!=', text: '!=' }, { value: '>', text: '>' }, { value: '<', text: '<' }, { value: '>=', text: '>=' }, { value: '<=', text: '<=' }, { value: 'in', text: 'IN' }, { value: 'not_in', text: 'NOT IN' }, { value: 'contains', text: '包含' }, { value: 'starts_with', text: '开头是' }, { value: 'ends_with', text: '结尾是' } ];
+            const operatorOptionsHTML = operators.map(op => `<option value="${op.value}">${op.text}</option>`).join('');
+            
+            $form.find('.condition-source-column').html(columnsOptionsHTML); 
+            $form.find('.condition-target-column').html(columnsOptionsHTML);
+            $form.find('.condition-inter-operator').html(operatorOptionsHTML);
+            
+            // Set existing data if provided
+            $form.find('.condition-source-column').val(existingData?.source_column || ''); 
+            $form.find('.condition-target-column').val(existingData?.target_column || ''); 
+            $form.find('.condition-inter-operator').val(existingData?.operator || '==');
+        }
+    }
+
+    // Modified formatConditionBlockText
+    function formatConditionBlockText(conditionData) {
+         if (conditionData.type === 'rule') {
+            let text = `[${conditionData.entity_type}].[${conditionData.column}] ${conditionData.operator}`;
+            if (conditionData.value !== null && conditionData.value !== undefined && conditionData.operator !== 'is_null' && conditionData.operator !== 'is_not_null') { 
+                text += ` '${conditionData.value}'`; 
+            }
+            return text;
+         } else if (conditionData.type === 'semantic') {
+             const cols = conditionData.columns.join(', ');
+             return `Semantic([${cols}] > ${conditionData.threshold})`;
+         } else if (conditionData.type === 'inter_entity_compare') {
+             return `[source].[${conditionData.source_column}] ${conditionData.operator} [target].[${conditionData.target_column}]`;
+         } else if (conditionData.type === 'group') {
+             return `Group(${conditionData.items ? conditionData.items.length : 0} items)`;
+         }
+         return '未知条件';
+    }
+
+    // Modified parseRuleEditorContent
+    function parseRuleEditorContent($editorArea) {
+        const tokens = [];
+        $editorArea.children('span').each(function() {
+            const $el = $(this);
+            try { // Add try-catch around parsing each element
+                if ($el.hasClass('rule-condition-block')) { 
+                     const condition = JSON.parse($el.attr('data-condition'));
+                     condition.type = 'rule'; // Explicitly set type
+                     tokens.push({ type: 'condition', data: condition }); 
+                } else if ($el.hasClass('rule-semantic-block')) { // Handle semantic block
+                     const condition = JSON.parse($el.attr('data-condition'));
+                     condition.type = 'semantic'; // Explicitly set type
+                     tokens.push({ type: 'condition', data: condition }); // Treat as 'condition' token type for parser
+                } else if ($el.hasClass('rule-inter-entity-block')) { // Handle inter entity compare block
+                     const condition = JSON.parse($el.attr('data-condition'));
+                     condition.type = 'inter_entity_compare'; // Explicitly set type
+                     tokens.push({ type: 'condition', data: condition }); // Treat as 'condition' token type for parser
+                } else if ($el.hasClass('rule-text-element')) { 
+                    const value = $el.data('value'); 
+                    if (value === '(' || value === ')') { tokens.push({ type: 'paren', value: value }); } 
+                    else if (value === 'AND' || value === 'OR') { tokens.push({ type: 'operator', value: value }); } 
+                }
+            } catch (e) {
+                 console.error("Failed to parse condition data for element:", $el[0], $el.attr('data-condition'), e); 
+                 // Optionally throw error or handle it (e.g., skip element)
+                 throw new Error(`无法解析编辑器中的元素数据: ${$el.attr('data-condition') || $el.data('value')}`); 
+            }
+        }); 
+        
+        if (tokens.length === 0 && $editorArea.text().trim() !== '') {
+             console.warn("编辑器不为空，但未能解析出任何令牌。内容:", $editorArea.html());
+             // Decide if this should be an error or allow empty rules
+             // return []; // Return empty array if this is acceptable
+             throw new Error("编辑器包含内容，但未能解析出任何有效条件或操作符。");
+        }
+        if (tokens.length === 0) {
+             return []; // Return empty list if editor is genuinely empty
+        }
+
+        // --- Inner Parsing Function (Modified Slightly) ---
+        function parseTokens(tokenSlice) { 
+            if (!tokenSlice || tokenSlice.length === 0) { return []; } 
+            const resultList = []; 
+            let currentOp = null; 
+            let i = 0;
+            while (i < tokenSlice.length) { 
+                let term = null; 
+                const currentToken = tokenSlice[i];
+                // Unified handling for rule and semantic conditions
+                if (currentToken.type === 'condition') { 
+                     // The 'type' ('rule' or 'semantic') is inside currentToken.data
+                     term = { ...currentToken.data }; // Copy data, includes type: 'rule' or 'semantic'
+                     i++; 
+                }
+                else if (currentToken.type === 'paren' && currentToken.value === '(') { 
+                    let balance = 1; 
+                    let j = i + 1; 
+                    while (j < tokenSlice.length) { 
+                        if (tokenSlice[j].type === 'paren') { 
+                            if (tokenSlice[j].value === '(') balance++; 
+                            else if (tokenSlice[j].value === ')') balance--; 
+                        } 
+                        if (balance === 0) break; 
+                        j++; 
+                    } 
+                    if (balance !== 0) { throw new Error("括号不匹配。"); } 
+                    const groupTokens = tokenSlice.slice(i + 1, j); 
+                    const groupItems = parseTokens(groupTokens); 
+                    if (groupItems.length === 0) { throw new Error("不允许使用空的括号组。"); } 
+                    else { term = { type: 'group', items: groupItems }; } // Group doesn't have data like rule/semantic
+                    i = j + 1; 
+                }
+                else { throw new Error(`无效的令牌序列：在期望条件或 '(' 的位置找到 ${JSON.stringify(currentToken)}`); }
+                
+                if (resultList.length > 0) { 
+                    if (currentOp) { 
+                        term.logic_operator = currentOp; // Add operator to the term object
+                        currentOp = null; 
+                    } else { 
+                        throw new Error(`在 ${JSON.stringify(term)} 之前缺少 AND 或 OR 操作符。`); 
+                    } 
+                } else if (currentOp) { 
+                    throw new Error(`操作符 ${currentOp} 不能出现在第一个条件之前。`); 
+                }
+                resultList.push(term);
+                
+                if (i < tokenSlice.length) { 
+                    const nextToken = tokenSlice[i]; 
+                    if (nextToken.type === 'operator') { 
+                        if (currentOp) { throw new Error(`连续的操作符：在 ${currentOp} 之后不能直接跟 ${nextToken.value}`); } 
+                        currentOp = nextToken.value; 
+                        i++; 
+                    } else if (nextToken.type === 'paren' && nextToken.value === ')') { 
+                        // This is okay if it closes a group started earlier, the loop structure handles this.
+                        // Error only if it's unexpected right after a term without an operator.
+                        // Let the next iteration handle the ')' if it's part of a closing group.
+                        // However, if the *outermost* level ends right after a term, an operator is missing before the end.
+                        // This is caught by the final `if (currentOp)` check after the loop.
+                    } else { 
+                         throw new Error(`在 ${JSON.stringify(term)} 之后缺少 AND 或 OR 操作符，但找到了 ${JSON.stringify(nextToken)}`); 
+                    } 
+                }
+            } 
+            if (currentOp) { throw new Error(`表达式不能以操作符 ${currentOp} 结尾。`); } 
+            return resultList;
+        }
+        // --- End Inner Parsing Function ---
+
+        try { 
+            const finalResult = parseTokens(tokens); 
+            if (finalResult.length === 0 && tokens.length > 0) { 
+                console.error("解析结果为空，但输入令牌不为空。 Tokens:", tokens); 
+                throw new Error("解析规则失败，最终结构为空。请检查输入。"); 
+            } 
+            console.log("Parsed rules:", JSON.stringify(finalResult)); 
+            return finalResult; 
+        } catch (e) { 
+            console.error("规则解析失败:", e.message); 
+            console.error("Input tokens:", tokens); 
+            // Provide more context in the alert
+            alert(`规则解析错误: ${e.message}\n请检查括号匹配、操作符使用以及条件块数据是否完整。\n\n解析的令牌: ${JSON.stringify(tokens)}`); 
+            return null; // Return null on parsing failure
+        }
+    }
+
+
+    // --- Utility Functions for UI Updates ---
+    function getNodeTypeOptionsHTML(includeEmpty = false) {
+        let options = includeEmpty ? '<option value="">-- 选择实体类型 --</option>' : '';
+        const nodeTypes = new Set();
+        // Use jQuery to select elements present in the DOM
+        $('.node-type-name').each(function() { const nodeTypeName = $(this).val().trim(); if (nodeTypeName) { nodeTypes.add(nodeTypeName); } });
+         nodeTypes.forEach(type => { options += `<option value="${type}">${type}</option>`; });
+        return options;
+    }
+
+    function updateRelationshipNodeTypes() {
+        const nodeTypeOptionsHTML = getNodeTypeOptionsHTML(true);
+        $('.source-node-type, .target-node-type').each(function() { 
+            const currentValue = $(this).val(); $(this).html(nodeTypeOptionsHTML);
+             let valueExists = false; $(this).find('option').each(function() { if ($(this).val() === currentValue) { valueExists = true; return false; } });
+             if (valueExists) { $(this).val(currentValue); } else { $(this).val(""); }
+        });
+    }
+    
+    // --- Build Function (Modified for new rule structure) ---
+    function buildKnowledgeGraph() {
+        console.log("正在开始构建知识图谱...");
+        const $buildBtn = $('#build-graph-btn');
+        const validatingText = window.i18nHelper ? window.i18nHelper.t('kg_construction.validating') : '验证中...';
+        $buildBtn.prop('disabled', true).text(validatingText);
+        const graphName = $('#graph-name').val().trim();
+        if (!graphName) { 
+            const alertMsg = window.i18nHelper ? window.i18nHelper.t('kg_construction.please_enter_graph_name') : '请输入知识图谱名称';
+            alert(alertMsg); 
+            $('#graph-name').focus(); 
+            const btnText = window.i18nHelper ? window.i18nHelper.t('kg_construction.build_graph_button') : '构建知识图谱';
+            $buildBtn.prop('disabled', false).text(btnText); 
+            return; 
+        }
+        
+        const nodeTypes = [];
+        let validNodeTypes = true;
+        $('.node-type-row').each(function(index) {
+            const $row = $(this);
+            const name = $row.find('.node-type-name').val().trim();
+            const identifierColumn = getSelectedRadioValue($row.find('.node-type-identifier-column-container'));
+            const attributeColumns = getSelectedCheckboxValues($row.find('.node-type-attribute-column-container'));
+            const $splitSection = $row.find('.split-config-section');
+            const splitEnabled = $splitSection.is(':visible') && $splitSection.find('.split-enabled-switch').is(':checked');
+            const delimiter = splitEnabled ? $splitSection.find('.split-delimiter').val().trim() : null;
+
+            if (!name) { 
+                const msg = window.i18nHelper ? window.i18nHelper.t('kg_construction.please_enter_entity_name') : '请输入名称';
+                alert(`${window.i18nHelper ? window.i18nHelper.t('kg_construction.entity_type') : '实体类型'} ${index + 1}: ${msg}`); 
+                $row.find('.node-type-name').focus(); validNodeTypes = false; return false; 
+            }
+            if (!identifierColumn) { 
+                const msg = window.i18nHelper ? window.i18nHelper.t('kg_construction.please_select_identifier_column') : '请选择一个标识符列';
+                alert(`${window.i18nHelper ? window.i18nHelper.t('kg_construction.entity_type') : '实体类型'} "${name}": ${msg}`); 
+                $row.find('.node-type-identifier-column-container').focus(); validNodeTypes = false; return false; 
+            }
+            if (attributeColumns.includes(identifierColumn)) { 
+                const msg = window.i18nHelper ? window.i18nHelper.t('kg_construction.identifier_cannot_be_attribute') : '标识符列不能同时也是属性列';
+                alert(`${window.i18nHelper ? window.i18nHelper.t('kg_construction.entity_type') : '实体类型'} "${name}": ${msg.replace('标识符列', `"${identifierColumn}"`).replace('Identifier column', `"${identifierColumn}"`)}${window.i18nHelper && window.i18nHelper.currentLang !== 'zh-CN' ? '' : ` "${identifierColumn}"`}`); 
+                $row.find('.node-type-attribute-column-container').focus(); validNodeTypes = false; return false; 
+            }
+            if (nodeTypes.some(nt => nt.name === name)) { 
+                const msg = window.i18nHelper ? window.i18nHelper.t('kg_construction.duplicate_entity_name') : '实体类型名称重复，请使用唯一的名称';
+                alert(`${window.i18nHelper ? window.i18nHelper.t('kg_construction.entity_type_name') : '实体类型名称'} "${name}" ${msg.replace('实体类型名称重复，请使用唯一的名称', '').replace('Entity type name is duplicated, please use a unique name', '').trim()}`);
+                $row.find('.node-type-name').focus(); validNodeTypes = false; return false; 
+            }
+            
+            const splitConfig = {
+                enabled: splitEnabled,
+                delimiter: delimiter
+            };
+            if (splitEnabled && !delimiter) {
+                 alert(`实体类型 "${name}": 已启用分隔符拆分，但未指定分隔符`);
+                 $splitSection.find('.split-delimiter').focus();
+                 validNodeTypes = false;
+                 return false;
+            }
+
+            nodeTypes.push({
+                 name: name,
+                 identifier_columns: [identifierColumn],
+                 attribute_columns: attributeColumns,
+                 split_config: splitConfig
+             });
+        });
+
+                 if (!validNodeTypes || nodeTypes.length === 0) {
+             if (validNodeTypes && nodeTypes.length === 0) {
+                 const msg = window.i18nHelper ? window.i18nHelper.t('kg_construction.please_define_entity_type') : '请至少定义一个实体类型';
+                 alert(msg);
+             }
+             const btnText = window.i18nHelper ? window.i18nHelper.t('kg_construction.build_graph_button') : '构建知识图谱';
+             $buildBtn.prop('disabled', false).text(btnText);
+             return;
+         }
+        console.log("收集的实体类型:", nodeTypes);
+
+        const relationships = [];
+        let validRelationships = true;
+        $('.relationship-row').each(function(index) {
+            const $row = $(this);
+            const source = $row.find('.source-node-type').val();
+            const type = $row.find('.relationship-type').val().trim();
+            const target = $row.find('.target-node-type').val();
+            const direction = $row.find('.relationship-direction').val();
+            const matchingMode = $row.find('.matching-mode-select').val();
+            if (!source || !type || !target) { 
+                const msg = window.i18nHelper ? window.i18nHelper.t('kg_construction.please_select_entities_and_type') : '请选择源实体、目标实体并输入关系类型名称';
+                alert(`${window.i18nHelper ? window.i18nHelper.t('kg_construction.relationship') : '关系'} ${index + 1}: ${msg}`); 
+                /* Focus logic */ validRelationships = false; return false; 
+            }
+            if (relationships.some(r => r.source === source && r.type === type && r.target === target && r.direction === direction)) { alert(`关系 "${source} -[${type}]-> ${target}" (${direction=='bi'?'双向':'单向'}) 已定义，请勿重复添加或修改现有定义。`); validRelationships = false; return false; }
+            const relationshipData = { source: source, type: type, target: target, direction: direction, matching_mode: matchingMode };
+            
+            if (matchingMode === 'inter-row') {
+                const $interOptions = $row.find('.inter-row-options');
+                const groupingColumns = getSelectedCheckboxValues($interOptions.find('.grouping-columns-select-container'));
+                // 移除对分组列必须选择的验证 - 分组列现在可以为空
+                // if (!groupingColumns || groupingColumns.length === 0) { alert(`关系 "${type}": 跨行匹配需要选择至少一个分组列`); $interOptions.find('.grouping-columns-select-container').focus(); validRelationships = false; return false; }
+                
+                const $editorArea = $interOptions.find('.rule-editor-area');
+                const parsedRules = parseRuleEditorContent($editorArea); // This now handles both rule and semantic
+                
+                if (parsedRules === null) { // Check if parsing failed
+                    validRelationships = false; 
+                    return false; // Stop processing relationships if parsing failed
+                }
+                // Allow empty rulesets if the editor was empty and parsing returned []
+                 if (parsedRules.length === 0 && $editorArea.children().length > 0) {
+                     alert(`关系 "${type}": 跨行匹配编辑器包含无法解析的内容，请检查。`);
+                     validRelationships = false;
+                     return false;
+                 }
+                 // Removed check for empty rules: sometimes no rule is intended if grouping is sufficient? Or maybe require at least one? Let's allow empty for now.
+                 // if (parsedRules.length === 0) { 
+                 //     alert(`关系 "${type}": 请为跨行匹配添加至少一个规则或语义条件`); 
+                 //     $interOptions.find('.add-condition-block-btn').first().focus(); // Focus first add button
+                 //     validRelationships = false; return false; 
+                 // }
+
+                const interRowOptions = { 
+                    grouping_columns: groupingColumns, 
+                    // condition_method: 'rule', // Implicitly rule-based now, structure defines content
+                    rules: parsedRules // This array now contains rule, semantic, and group objects
+                };
+                relationshipData.inter_row_options = interRowOptions;
+                console.log(`Parsed rules/semantic conditions for ${type}:`, JSON.stringify(parsedRules));
+            }
+            relationships.push(relationshipData);
+        });
+
+                 if (!validRelationships) {
+             const btnText = window.i18nHelper ? window.i18nHelper.t('kg_construction.build_graph_button') : '构建知识图谱';
+             $buildBtn.prop('disabled', false).text(btnText);
+             return;
+         }
+         console.log("收集的关系定义:", relationships);
+
+        const database = $('#database-select').val();
+        const table = $('#table-select').val();
+        const graphData = { name: graphName, database: database, table: table, node_types: nodeTypes, relationships: relationships };
+        console.log("最终数据包:", graphData);
+        const buildingText = window.i18nHelper ? window.i18nHelper.t('kg_construction.building') : '构建中...';
+        $buildBtn.text(buildingText);
+
+        fetch('/api/kg/graphs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graphData) })
+        .then(response => {
+            if (!response.ok) { return response.json().then(errData => { throw new Error(errData.message || '创建知识图谱失败，无详细信息'); }).catch(() => { throw new Error(`创建知识图谱失败 (HTTP ${response.status})`); }); }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'success') {
+                alert(data.message || '知识图谱创建成功，构建过程已启动');
+                $('#graph-name').val(''); 
+                 // Optionally reset the form completely
+                 // $('#database-select').val('').trigger('change'); 
+                loadExistingGraphs();
+            } else { throw new Error(data.message || '创建知识图谱时发生未知错误'); }
+        })
+        .catch(error => { console.error("构建失败:", error); alert(`构建失败: ${error.message}`); })
+        .finally(() => { 
+            const btnText = window.i18nHelper ? window.i18nHelper.t('kg_construction.build_graph_button') : '构建知识图谱';
+            $buildBtn.prop('disabled', false).text(btnText); 
+        });
+    }
+
+
+    // ==============================================
+    //  DOM Ready - 事件绑定和初始化调用
+    // ==============================================
+    $(document).ready(function() {
+        // Database select change
+        $('#database-select').change(function() {
+            const selectedDb = $(this).val();
+            $('#table-select').prop('disabled', !selectedDb);
+            if (selectedDb) {
+                loadTables(selectedDb);
+            } else {
+                const selectDbFirstText = window.i18nHelper ? window.i18nHelper.t('kg_construction.select_database_first') : '-- 先选择数据库 --';
+                $('#table-select').html(`<option value="">${selectDbFirstText}</option>`);
+                $('#load-schema-btn').prop('disabled', true);
+                $('#schema-card, #definition-card, #build-action-card').hide();
+                 $('#schema-container, #node-types-container, #relationships-container').empty();
+
+            }
+             $('#table-select').val('');
+             $('#load-schema-btn').prop('disabled', true);
+        });
+        
+        // Table select change
+        $('#table-select').change(function() {
+            const selectedTable = $(this).val();
+            $('#load-schema-btn').prop('disabled', !selectedTable);
+             if (!selectedTable) {
+                $('#schema-card, #definition-card, #build-action-card').hide();
+                $('#schema-container, #node-types-container, #relationships-container').empty();
+             }
+        });
+        
+        // Load schema button click
+        $('#load-schema-btn').click(function() {
+            const selectedDb = $('#database-select').val();
+            const selectedTable = $('#table-select').val();
+            if (selectedDb && selectedTable) {
+            loadTableSchema(selectedDb, selectedTable);
+            }
+        });
+
+        // Add node type button click
+        $('#add-node-type-btn').click(function() {
+            const columns = getCurrentSchemaColumns(); 
+            addNodeTypeRow(columns); 
+        });
+        
+        // Add relationship button click
+        $('#add-relationship-btn').click(function() {
+             const columns = getCurrentSchemaColumns();
+            addRelationshipRow(columns); 
+        });
+        
+        // Build knowledge graph button click
+        $('#build-graph-btn').click(function() {
+            buildKnowledgeGraph(); 
+        });
+        
+        // --- Event delegation for dynamic elements ---
+        $(document).on('click', '.remove-node-type-btn', function() {
+            $(this).closest('.node-type-row').remove();
+            updateRelationshipNodeTypes(); 
+        });
+        
+        $(document).on('click', '.remove-relationship-btn', function() {
+            $(this).closest('.relationship-row').remove();
+        });
+        
+         $(document).on('change', '.node-type-name', function() {
+             updateRelationshipNodeTypes();
+         });
+
+        $(document).on('change', '.matching-mode-select', function() {
+            const $row = $(this).closest('.relationship-row');
+            const mode = $(this).val();
+            $row.find('.inter-row-options').slideToggle(mode === 'inter-row'); 
+        });
+
+         $(document).on('input', '.similarity-threshold-slider', function() {
+              // Update display within the same form section or block
+             $(this).closest('.condition-form-semantic-section, .semantic-based-conditions').find('.threshold-value-display').text($(this).val());
+         });
+        
+        // --- Rule Editor Event Listeners (Modified) ---
+        $(document).on('click', '.insert-rule-element-btn', function() {
+            const elementText = $(this).data('element');
+            const $editorArea = $(this).closest('.rule-based-conditions').find('.rule-editor-area');
+            const elementHTML = `
+                <span class="rule-text-element" data-value="${elementText}" contenteditable="false">
+                    ${elementText}
+                    <span class="remove-element-btn" aria-label="删除" title="删除">
+                        <span aria-hidden="true">&times;</span>
+                    </span>
+                </span>`;
+            $editorArea.append(elementHTML);
+        });
+        
+        // Modified: Add Condition Block button (Rule or Semantic)
+        $(document).on('click', '.add-condition-block-btn', function() {
+            console.log("Add Condition Block button clicked!");
+            const conditionType = $(this).data('type'); // 'rule' or 'semantic'
+            const $ruleConditions = $(this).closest('.rule-based-conditions');
+            const $form = $ruleConditions.find('.condition-editor-form');
+            const columns = getCurrentSchemaColumns();
+            resetAndPrepareConditionForm($form, columns, conditionType); // Pass type
+            $form.slideDown();
+        });
+        
+        $(document).on('click', '.cancel-condition-btn', function() {
+            $(this).closest('.condition-editor-form').slideUp();
+        });
+
+        // Modified: Save Condition Button (Handles both types)
+        $(document).on('click', '.save-condition-btn', function() {
+            const $form = $(this).closest('.condition-editor-form');
+            const $editorArea = $form.siblings('.rule-editor-area'); // Find editor area relative to form
+            const editingBlockId = $form.find('.editing-block-id').val();
+            const conditionType = $form.find('.editing-block-type').val(); // Get the type being edited/saved
+            
+            let conditionData = null;
+            let blockText = '';
+            let blockClass = '';
+            let valid = true;
+
+            if (conditionType === 'rule') {
+                blockClass = 'rule-condition-block';
+                const entityType = $form.find('.condition-entity-type').val();
+                const column = $form.find('.condition-column').val();
+                const operator = $form.find('.condition-operator').val();
+                const valueInput = $form.find('.condition-value');
+                const value = valueInput.is(':visible') ? valueInput.val().trim() : null;
+
+                if (!column || !operator) { alert('规则条件: 请选择列和操作符'); valid = false; }
+                 // Adjust validation: null/undefined check for value is better
+                 if (operator !== 'is_null' && operator !== 'is_not_null' && (value === null || value === '')) { 
+                     alert(`规则条件: 请为操作符 "${operator}" 输入条件值`); valueInput.focus(); valid = false; 
+                 }
+
+                if (valid) {
+                    conditionData = { type: 'rule', entity_type: entityType, column: column, operator: operator, value: value };
+                    blockText = formatConditionBlockText(conditionData);
+                }
+            } else if (conditionType === 'semantic') {
+                blockClass = 'rule-semantic-block';
+                const semanticColumns = getSelectedCheckboxValues($form.find('.condition-form-semantic-section .semantic-columns-select-container'));
+                const threshold = parseFloat($form.find('.similarity-threshold-slider').val());
+
+                if (!semanticColumns || semanticColumns.length === 0) { alert('语义条件: 请选择至少一个用于计算的列'); $form.find('.semantic-columns-select-container').focus(); valid = false; }
+                
+                if (valid) {
+                    conditionData = { type: 'semantic', columns: semanticColumns, threshold: threshold };
+                    blockText = formatConditionBlockText(conditionData);
+                }
+            } else if (conditionType === 'inter_entity_compare') {
+                blockClass = 'rule-inter-entity-block';
+                const sourceColumn = $form.find('.condition-source-column').val();
+                const targetColumn = $form.find('.condition-target-column').val();
+                const operator = $form.find('.condition-inter-operator').val();
+
+                if (!sourceColumn || !targetColumn || !operator) { 
+                    alert('实体间比较条件: 请选择源列、目标列和操作符'); 
+                    valid = false; 
+                }
+                
+                if (valid) {
+                    conditionData = { type: 'inter_entity_compare', source_column: sourceColumn, target_column: targetColumn, operator: operator };
+                    blockText = formatConditionBlockText(conditionData);
+                }
+            } else {
+                console.error("Unknown condition type in form:", conditionType);
+                alert("未知的条件类型，无法保存。");
+                valid = false;
+            }
+
+            if (!valid) { return; } // Stop if validation failed
+
+            const blockHTML = `
+                <span class="${blockClass}" data-condition='${JSON.stringify(conditionData)}' contenteditable="false" title="点击编辑">
+                    <span class="condition-block-text">${blockText}</span> 
+                    <span class="remove-element-btn" aria-label="删除" title="删除">
+                        <span aria-hidden="true">&times;</span>
+                    </span>
+                </span>`;
+            
+            if (editingBlockId) { // Editing existing block
+                const $existingBlock = $editorArea.find('#' + editingBlockId); // Use ID selector
+                 if ($existingBlock.length) { 
+                     // Replace entire block to ensure class and data are updated correctly
+                     const newBlock = $(blockHTML).attr('id', editingBlockId); // Keep the original ID
+                     $existingBlock.replaceWith(newBlock);
+                     console.log("Updated block:", editingBlockId, conditionData);
+                 } else { 
+                    console.warn("无法找到要更新的块：", editingBlockId); 
+                    // Optionally append as new if update target lost? Or just fail?
+                 }
+            } else { // Adding new block
+                const finalHTML = $(blockHTML); 
+                const newId = `cond-block-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+                finalHTML.attr('id', newId); 
+                $editorArea.append(finalHTML);
+                console.log("Added new block:", newId, conditionData);
+            }
+            $form.slideUp();
+        });
+
+        $(document).on('click', '.remove-element-btn', function(e) { e.stopPropagation(); $(this).parent().remove(); });
+        
+        // Modified: Click handler for both rule and semantic blocks
+        $(document).on('click', '.rule-condition-block, .rule-semantic-block, .rule-inter-entity-block', function(event) {
+             if ($(event.target).hasClass('remove-element-btn') || $(event.target).parent().hasClass('remove-element-btn')) { return; } // Ignore clicks on remove button
+            const $block = $(this); 
+            const $form = $block.closest('.rule-based-conditions').find('.condition-editor-form'); 
+            const currentData = JSON.parse($block.attr('data-condition')); 
+            const columns = getCurrentSchemaColumns();
+            let conditionType = 'rule'; // default
+            if ($block.hasClass('rule-semantic-block')) {
+                conditionType = 'semantic';
+            } else if ($block.hasClass('rule-inter-entity-block')) {
+                conditionType = 'inter_entity_compare';
+            }
+            
+            resetAndPrepareConditionForm($form, columns, conditionType, currentData); // Pass type and data
+            $form.find('.editing-block-id').val($block.attr('id')); // Set ID for potential update
+            
+            if (!$form.is(':visible')) { $form.slideDown(); } 
+            else { 
+                 // Simple visual feedback if form is already open for another block
+                 let highlightColor = '#e9ecef'; // default for rule
+                 if (conditionType === 'semantic') highlightColor = '#d1ecf1';
+                 else if (conditionType === 'inter_entity_compare') highlightColor = '#ffeaa7';
+                 
+                 $form.css('transition', 'background-color 0.3s ease')
+                      .css('background-color', highlightColor)
+                      .delay(300)
+                      .queue(function(next) { $(this).css('background-color', ''); next(); }); 
+             }
+            $form[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+
+         // Handles the visibility of the value input in the RULE section of the form
+         $(document).on('change', '.condition-editor-form .condition-operator', function() {
+             const $form = $(this).closest('.condition-editor-form'); 
+             const op = $(this).val(); 
+             const $valueWrapper = $form.find('.condition-form-rule-section .condition-value-wrapper'); // Target rule section's value
+             const $hint = $form.find('.condition-form-rule-section .condition-value-hint');
+             $valueWrapper.toggle(op !== 'is_null' && op !== 'is_not_null'); 
+             $hint.toggle(op === 'in' || op === 'not_in');
+         });
+         // --- End Rule Editor Event Listeners ---
+
+         // Event delegation for delete/rebuild buttons 
+         $(document).on('click', '.delete-graph-btn', function() { deleteGraph($(this).data('id')); });
+         $(document).on('click', '.rebuild-graph-btn', function() { rebuildGraph($(this).data('id')); });
+
+        // Add event listener for identifier radio change
+        $(document).on('change', '.node-type-identifier-radio', function() {
+             const $row = $(this).closest('.node-type-row');
+             const $splitSection = $row.find('.split-config-section');
+             if ($(this).is(':checked')) {
+                 $splitSection.slideDown(); 
+             } 
+         });
+
+        // Add event listener for split enable switch change
+        $(document).on('change', '.split-enabled-switch', function() {
+            const $inputGroup = $(this).closest('.split-config-section').find('.split-delimiter-input');
+            $inputGroup.slideToggle($(this).is(':checked'));
+        });
+
+        // AI自动分析按钮点击事件
+        $('#llm-suggest-btn').on('click', function() {
+            const database = $('#database-select').val();
+            const table = $('#table-select').val();
+            if (!database || !table) {
+                const selectDbTableText = window.i18nHelper ? window.i18nHelper.t('kg_construction.please_select_database_table') : '请先选择数据库和表';
+                alert(selectDbTableText);
+                return;
+            }
+            
+            // 显示加载状态
+            const originalText = $(this).text();
+            const analyzingText = window.i18nHelper ? window.i18nHelper.t('kg_construction.analyzing') : '分析中...';
+            $(this).text(analyzingText).prop('disabled', true);
+            
+            // 调用后端API
+            fetch('/api/kg/llm-suggest-construction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ database, table })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('AI分析失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    // 成功获取AI建议
+                    const suggestions = data.suggestions;
+                    
+                    // 如果有错误消息，显示错误
+                    if (suggestions.error) {
+                        alert(`AI分析失败: ${suggestions.error}`);
+                        return;
+                    }
+                    
+                    // 先加载表结构，但使用Promise方式等待加载完成
+                    return new Promise((resolve) => {
+                        // 先清空定义区域
+                        $('#node-types-container, #relationships-container').empty();
+                        
+                        // 设置图谱名称
+                        $('#graph-name').val(suggestions.graph_name || `${table}知识图谱`);
+                        
+                        // 加载表结构，并指明是AI建议上下文
+                        loadTableSchema(database, table, true); // Pass true for isAISuggestionContext
+                        
+                        // 等待表结构加载完成（通过检测schema-container内容是否存在）
+                        const checkSchemaLoaded = () => {
+                            if ($('#schema-container table').length > 0) {
+                                // 表结构已加载
+                                resolve(suggestions);
+                            } else {
+                                // 继续等待
+                                setTimeout(checkSchemaLoaded, 200);
+                            }
+                        };
+                        
+                        checkSchemaLoaded();
+                    });
+                } else {
+                    throw new Error(data.message || '未知错误');
+                }
+            })
+            .then(suggestions => {
+                if (!suggestions) return;
+                
+                // 显示定义卡片
+                $('#definition-card').show();
+                
+                // 延迟一段时间，确保节点类型和关系可以正确添加
+                setTimeout(() => {
+                    console.log('[AI Suggest] 开始应用大模型建议. 原始建议:', JSON.parse(JSON.stringify(suggestions)));
+                    
+                    // 添加AI建议的节点类型
+                    if (suggestions.node_types && suggestions.node_types.length > 0) {
+                        console.log(`[AI Suggest] 准备添加 ${suggestions.node_types.length} 个实体类型.`);
+                        const columnsForNodeTypes = getCurrentSchemaColumns(); // 获取一次列信息
+                        suggestions.node_types.forEach((nodeType, index) => {
+                            console.log(`[AI Suggest] 实体类型 ${index}:`, JSON.parse(JSON.stringify(nodeType)));
+                            
+                            // 直接调用函数添加行，并获取返回的行对象
+                            const $newNodeTypeRow = addNodeTypeRow(columnsForNodeTypes);
+                            console.log(`[AI Suggest] 实体类型 ${index}: 直接调用 addNodeTypeRow() 创建了新行, ID: ${$newNodeTypeRow.attr('id')}`);
+                            
+                            // 不再需要setTimeout，直接操作 $newNodeTypeRow
+                            if (!$newNodeTypeRow.length) {
+                                console.error(`[AI Suggest] 实体类型 ${index}: addNodeTypeRow() 返回了无效对象`);
+                                return; // 跳过此实体类型
+                            }
+                            
+                            // 设置节点类型名称
+                            $newNodeTypeRow.find('.node-type-name').val(nodeType.name);
+                            console.log(`[AI Suggest] 实体类型 ${index}: 设置名称为 "${nodeType.name}"`);
+                            
+                            // 设置标识符列
+                            const identifierColumns = Array.isArray(nodeType.identifier_columns) ? 
+                                nodeType.identifier_columns : [nodeType.identifier_columns];
+                            console.log(`[AI Suggest] 实体类型 ${index}: 准备设置标识符列:`, identifierColumns);
+                            if (identifierColumns && identifierColumns.length > 0) {
+                                const identifierColumn = identifierColumns[0];
+                                const $identifierRadio = $newNodeTypeRow.find(`.node-type-identifier-column-container input[type="radio"][value="${identifierColumn}"]`);
+                                if ($identifierRadio.length) {
+                                    $identifierRadio.prop('checked', true).trigger('change');
+                                    console.log(`[AI Suggest] 实体类型 ${index}: 选中标识符列(单选): "${identifierColumn}"`);
+                                } else {
+                                    console.warn(`[AI Suggest] 实体类型 ${index}: 未找到标识符列的单选按钮 for value "${identifierColumn}"`);
+                                }
+                            } else {
+                                console.log(`[AI Suggest] 实体类型 ${index}: 无标识符列需要设置.`);
+                            }
+                            
+                            // 设置属性列
+                            const attributeColumns = Array.isArray(nodeType.attribute_columns) ? 
+                                nodeType.attribute_columns : [nodeType.attribute_columns];
+                            console.log(`[AI Suggest] 实体类型 ${index}: 准备设置属性列:`, attributeColumns);
+                            attributeColumns.forEach(column => {
+                                if (column) {
+                                    const $attributeCheckbox = $newNodeTypeRow.find(`.node-type-attribute-column-container input[type="checkbox"][value="${column}"]`);
+                                    if ($attributeCheckbox.length) {
+                                        $attributeCheckbox.prop('checked', true);
+                                        console.log(`[AI Suggest] 实体类型 ${index}: 选中属性列(复选): "${column}"`);
+                                    } else {
+                                        console.warn(`[AI Suggest] 实体类型 ${index}: 未找到属性列的复选框 for value "${column}"`);
+                                    }
+                                }
+                            });
+                            
+                            // 设置拆分配置
+                            console.log(`[AI Suggest] 实体类型 ${index}: 准备设置拆分配置:`, nodeType.split_config);
+                            if (nodeType.split_config && nodeType.split_config.enabled) {
+                                const $splitCheckbox = $newNodeTypeRow.find('.split-enabled-switch');
+                                if ($splitCheckbox.length) {
+                                    $splitCheckbox.prop('checked', true).trigger('change');
+                                    console.log(`[AI Suggest] 实体类型 ${index}: 启用拆分配置开关.`);
+                                    const $delimiterInput = $newNodeTypeRow.find('.split-delimiter');
+                                    if ($delimiterInput.length) {
+                                        $delimiterInput.val(nodeType.split_config.delimiter || ',');
+                                        console.log(`[AI Suggest] 实体类型 ${index}: 设置分隔符为 "${nodeType.split_config.delimiter || ','}"`);
+                                    } else {
+                                        console.warn(`[AI Suggest] 实体类型 ${index}: 未找到分隔符输入框.`);
+                                    }
+                                } else {
+                                    console.warn(`[AI Suggest] 实体类型 ${index}: 未找到拆分配置开关.`);
+                                }
+                            } else {
+                                console.log(`[AI Suggest] 实体类型 ${index}: 拆分配置未启用或不存在.`);
+                            }
+                        });
+                    } else {
+                        console.log(`[AI Suggest] 无实体类型建议.`);
+                    }
+                    
+                    // 添加AI建议的关系
+                    // 需要确保在所有实体类型都添加到DOM并且它们的名称被设置后，再更新关系下拉列表的选项
+                    updateRelationshipNodeTypes(); // 在填充关系之前，立即更新一次关系下拉列表的选项
+                    console.log("[AI Suggest] 已调用 updateRelationshipNodeTypes() 更新关系下拉列表选项");
+
+                    if (suggestions.relationships && suggestions.relationships.length > 0) {
+                        console.log(`[AI Suggest] 准备添加 ${suggestions.relationships.length} 个关系.`);
+                        const columnsForRelationshipTypes = getCurrentSchemaColumns(); // 获取一次列信息
+                        suggestions.relationships.forEach((relationship, relIndex) => {
+                            console.log(`[AI Suggest] 关系 ${relIndex}:`, JSON.parse(JSON.stringify(relationship)));
+                            
+                            // 直接调用函数添加行，并获取返回的行对象
+                            const $newRelationshipRow = addRelationshipRow(columnsForRelationshipTypes);
+                            console.log(`[AI Suggest] 关系 ${relIndex}: 直接调用 addRelationshipRow() 创建了新行, ID: ${$newRelationshipRow.attr('id')}`);
+                            
+                            // 不再需要setTimeout，直接操作 $newRelationshipRow
+                            if (!$newRelationshipRow.length) {
+                                console.error(`[AI Suggest] 关系 ${relIndex}: addRelationshipRow() 返回了无效对象`);
+                                return; // 跳过此关系
+                            }
+                            
+                            // 设置源节点类型
+                            const sourceType = relationship.source_node_type;
+                            const $sourceSelect = $newRelationshipRow.find('.source-node-type');
+                            let sourceSet = false;
+                            $sourceSelect.find('option').each(function() {
+                                if ($(this).text() === sourceType || $(this).val() === sourceType) {
+                                    $sourceSelect.val($(this).val());
+                                    sourceSet = true;
+                                    console.log(`[AI Suggest] 关系 ${relIndex}: 设置源实体类型为 "${sourceType}" (值: ${$(this).val()})`);
+                                    return false;
+                                }
+                            });
+                            if (!sourceSet) console.warn(`[AI Suggest] 关系 ${relIndex}: 未找到匹配的源实体类型选项 for "${sourceType}"`);
+                            
+                            // 设置目标节点类型
+                            const targetType = relationship.target_node_type;
+                            const $targetSelect = $newRelationshipRow.find('.target-node-type');
+                            let targetSet = false;
+                            $targetSelect.find('option').each(function() {
+                                if ($(this).text() === targetType || $(this).val() === targetType) {
+                                    $targetSelect.val($(this).val());
+                                    targetSet = true;
+                                    console.log(`[AI Suggest] 关系 ${relIndex}: 设置目标实体类型为 "${targetType}" (值: ${$(this).val()})`);
+                                    return false;
+                                }
+                            });
+                            if (!targetSet) console.warn(`[AI Suggest] 关系 ${relIndex}: 未找到匹配的目标实体类型选项 for "${targetType}"`);
+                            
+                            // 设置关系类型
+                            $newRelationshipRow.find('.relationship-type').val(relationship.type);
+                            console.log(`[AI Suggest] 关系 ${relIndex}: 设置关系类型为 "${relationship.type}"`);
+                            
+                            // 设置方向
+                            $newRelationshipRow.find('.relationship-direction').val(relationship.direction || 'uni');
+                            console.log(`[AI Suggest] 关系 ${relIndex}: 设置方向为 "${relationship.direction || 'uni'}"`);
+                            
+                            // 设置匹配模式
+                            const $matchingMode = $newRelationshipRow.find('.matching-mode-select');
+                            $matchingMode.val(relationship.matching_mode || 'intra-row');
+                            console.log(`[AI Suggest] 关系 ${relIndex}: 设置匹配模式为 "${relationship.matching_mode || 'intra-row'}"`);
+                            
+                            if (relationship.matching_mode === 'inter-row' && relationship.inter_row_options) {
+                                console.log(`[AI Suggest] 关系 ${relIndex}: 检测到跨行匹配，配置:`, relationship.inter_row_options);
+                                $matchingMode.trigger('change');
+                                
+                                // 确保 .inter-row-options 可见后再填充
+                                const $interRowConfig = $newRelationshipRow.find('.inter-row-options');
+                                if ($interRowConfig.is(':visible')) {
+                                    // 处理分组列
+                                    if (relationship.inter_row_options.grouping_columns && relationship.inter_row_options.grouping_columns.length > 0) {
+                                        const groupingColumns = relationship.inter_row_options.grouping_columns;
+                                        console.log(`[AI Suggest] 关系 ${relIndex}: 准备设置分组列:`, groupingColumns);
+                                        let foundGroupingCols = 0;
+                                        $interRowConfig.find('.grouping-columns-select-container input[type="checkbox"]').each(function() {
+                                            if (groupingColumns.includes($(this).val())) {
+                                                $(this).prop('checked', true);
+                                                foundGroupingCols++;
+                                                console.log(`[AI Suggest] 关系 ${relIndex}: 选中分组列 "${$(this).val()}"`);
+                                            }
+                                        });
+                                        
+                                        if (foundGroupingCols === 0) {
+                                            console.log(`[AI Suggest] 关系 ${relIndex}: AI建议的跨行匹配没有分组列，将在全表范围内匹配`);
+                                        } else {
+                                            console.log(`[AI Suggest] 关系 ${relIndex}: 成功设置了 ${foundGroupingCols} 个分组列`);
+                                        }
+                                    } else {
+                                        console.log(`[AI Suggest] 关系 ${relIndex}: AI建议的跨行匹配没有分组列，将在全表范围内匹配`);
+                                    }
+                                    
+                                    // 处理跨行规则
+                                    if (relationship.inter_row_options.rules && relationship.inter_row_options.rules.length > 0) {
+                                       console.log(`[AI Suggest] 关系 ${relIndex}: 开始填充跨行规则到编辑器，规则数量: ${relationship.inter_row_options.rules.length}`);
+                                       
+                                       // 获取规则编辑器区域
+                                       const $ruleEditor = $interRowConfig.find('.rule-editor-area');
+                                       
+                                       // 清空现有内容
+                                       $ruleEditor.empty();
+                                       
+                                       // 递归函数处理规则结构
+                                       function appendRuleToEditor(rule, ruleIndex, isLastRule) {
+                                           if (rule.type === 'group') {
+                                               // 处理组类型：添加开括号
+                                               const openParenHTML = `
+                                                   <span class="rule-text-element" data-value="(" contenteditable="false">
+                                                       (
+                                                       <span class="remove-element-btn" aria-label="删除" title="删除">
+                                                           <span aria-hidden="true">&times;</span>
+                                                       </span>
+                                                   </span>`;
+                                               $ruleEditor.append(openParenHTML);
+                                               
+                                               // 递归处理组内的规则
+                                               if (rule.items && rule.items.length > 0) {
+                                                   rule.items.forEach((item, itemIndex) => {
+                                                       appendRuleToEditor(item, itemIndex, itemIndex === rule.items.length - 1);
+                                                   });
+                                               }
+                                               
+                                               // 添加闭括号
+                                               const closeParenHTML = `
+                                                   <span class="rule-text-element" data-value=")" contenteditable="false">
+                                                       )
+                                                       <span class="remove-element-btn" aria-label="删除" title="删除">
+                                                           <span aria-hidden="true">&times;</span>
+                                                       </span>
+                                                   </span>`;
+                                               $ruleEditor.append(closeParenHTML);
+                                           } else {
+                                               // 处理普通规则、语义条件、实体间比较
+                                               const blockId = `ai-suggest-${relIndex}-rule-${ruleIndex}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+                                               let blockClass;
+                                               
+                                               if (rule.type === 'rule') {
+                                                   blockClass = 'rule-condition-block';
+                                               } else if (rule.type === 'semantic') {
+                                                   blockClass = 'rule-semantic-block';
+                                               } else if (rule.type === 'inter_entity_compare') {
+                                                   blockClass = 'rule-inter-entity-block';
+                                               } else {
+                                                   blockClass = 'rule-condition-block'; // 默认
+                                               }
+                                               
+                                               // 使用现有的formatConditionBlockText函数保持格式一致性
+                                               const blockText = formatConditionBlockText(rule);
+                                               
+                                               // 创建规则块HTML
+                                               const ruleBlockHTML = `
+                                                   <span class="${blockClass}" id="${blockId}" data-condition='${JSON.stringify(rule)}' contenteditable="false" title="点击编辑">
+                                                       <span class="condition-block-text">${blockText}</span> 
+                                                       <span class="remove-element-btn" aria-label="删除" title="删除">
+                                                           <span aria-hidden="true">&times;</span>
+                                                       </span>
+                                                   </span>`;
+                                               
+                                               $ruleEditor.append(ruleBlockHTML);
+                                           }
+                                           
+                                           // 如果有逻辑操作符且不是最后一个规则，添加操作符
+                                           if (rule.logic_operator && !isLastRule) {
+                                               const operatorHTML = `
+                                                   <span class="rule-text-element" data-value="${rule.logic_operator}" contenteditable="false">
+                                                       ${rule.logic_operator}
+                                                       <span class="remove-element-btn" aria-label="删除" title="删除">
+                                                           <span aria-hidden="true">&times;</span>
+                                                       </span>
+                                                   </span>`;
+                                               $ruleEditor.append(operatorHTML);
+                                           }
+                                       }
+                                       
+                                       // 填充规则到编辑器
+                                       relationship.inter_row_options.rules.forEach((rule, ruleIndex) => {
+                                           appendRuleToEditor(rule, ruleIndex, ruleIndex === relationship.inter_row_options.rules.length - 1);
+                                           console.log(`[AI Suggest] 关系 ${relIndex}: 添加规则 ${ruleIndex}: ${rule.type}`);
+                                       });
+                                       
+                                       console.log(`[AI Suggest] 关系 ${relIndex}: 跨行规则填充完成`);
+                                    } else {
+                                        console.log(`[AI Suggest] 关系 ${relIndex}: 无跨行规则需要填充`);
+                                    }
+                                } else {
+                                    console.warn(`[AI Suggest] 关系 ${relIndex}: 跨行选项区域未显示，无法填充分组列和规则`);
+                                }
+                            }
+                        });
+                    } else {
+                        console.log(`[AI Suggest] 无关系建议.`);
+                    }
+                    
+                    // 显示构建按钮
+                    $('#build-action-card').show();
+                    
+                    // 滚动到页面底部，方便用户查看结果
+                    console.log("[AI Suggest] 应用建议完成，滚动到页面底部.");
+                    $('html, body').animate({ scrollTop: $(document).height() }, 'slow');
+                }, 550); // 确保在表结构和基本DOM元素加载后再开始应用建议
+            })
+            .catch(error => {
+                console.error('AI分析失败:', error);
+                alert(`AI分析失败: ${error.message}`);
+            })
+            .finally(() => {
+                // 恢复按钮状态
+                $(this).text(originalText).prop('disabled', false);
+            });
+        });
+
+        // 表选择变化事件
+        $('#table-select').on('change', function() {
+            const table = $(this).val();
+            $('#load-schema-btn, #llm-suggest-btn').prop('disabled', !table);
+            
+            // 隐藏之前的卡片
+            $('#schema-card, #definition-card, #build-action-card').hide();
+        });
+
+        // Initial load calls
+        loadDatabases();
+        loadExistingGraphs();
+    });
+
+</script>
+
+<!-- 添加 SortableJS CDN 到块的末尾 -->
+<script src="{{ url_for('static', filename='js/vendor/sortable.min.js') }}"></script>
+
+{% endblock %} 

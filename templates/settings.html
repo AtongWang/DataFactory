@@ -1,0 +1,837 @@
+{% extends "layout.html" %}
+
+{% block title %}WisdominDATA - 系统设置{% endblock %}
+
+{% block content %}
+<h1 class="page-title" data-i18n="settings.title">系统设置</h1>
+
+<div class="card">
+    <h2 class="card-title" data-i18n="settings.language_settings">语言设置</h2>
+    <div class="form-group">
+        <label for="interface-language" class="form-label" data-i18n="settings.language">界面语言</label>
+        <select id="interface-language" class="form-control">
+            <option value="zh-CN" data-i18n="language.chinese">中文</option>
+            <option value="en-US" data-i18n="language.english">English</option>
+        </select>
+        <small class="form-text text-muted" data-i18n="settings.language_description">选择系统界面显示语言</small>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="card-title" data-i18n="settings.database_settings">数据库设置</h2>
+    <div class="form-group">
+        <label for="database-type" class="form-label" data-i18n="settings.database_type">数据库类型</label>
+        <select id="database-type" class="form-control">
+            <option value="sqlite" {% if config.database.type == 'sqlite' %}selected{% endif %}>SQLite</option>
+            <option value="mysql" {% if config.database.type == 'mysql' %}selected{% endif %}>MySQL</option>
+            <option value="postgres" {% if config.database.type == 'postgres' %}selected{% endif %}>PostgreSQL</option>
+        </select>
+    </div>
+    
+    <div id="database-connection-settings" {% if config.database.type == 'sqlite' %}style="display:none"{% endif %}>
+        <div class="form-group">
+            <label for="database-host" class="form-label" data-i18n="settings.database_host">主机地址</label>
+            <input type="text" id="database-host" class="form-control" value="{{ config.database.host }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="database-port" class="form-label" data-i18n="settings.database_port">端口</label>
+            <input type="text" id="database-port" class="form-control" value="{{ config.database.port }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="database-username" class="form-label" data-i18n="settings.database_username">用户名</label>
+            <input type="text" id="database-username" class="form-control" value="{{ config.database.username }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="database-password" class="form-label" data-i18n="settings.database_password">密码</label>
+            <input type="password" id="database-password" class="form-control" value="{{ config.database.password }}">
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label for="database-name" class="form-label" data-i18n="settings.database_name">数据库名称</label>
+        <input type="text" id="database-name" class="form-control" value="{{ config.database.database_name }}" data-i18n-placeholder="settings.database_name_placeholder_sqlite" placeholder="SQLite数据库文件路径或数据库名称">
+    </div>
+    
+    <button id="test-connection-btn" class="btn btn-secondary" data-i18n="settings.test_connection">测试连接</button>
+</div>
+
+<div class="card">
+    <h2 class="card-title" data-i18n="settings.vector_database_settings">向量数据库设置</h2>
+    <div class="form-group">
+        <label for="vector-db-path" class="form-label" data-i18n="settings.vector_db_path">向量数据库路径</label>
+        <input type="text" id="vector-db-path" class="form-control" value="{{ config.store_database.path }}" data-i18n-placeholder="settings.vector_db_path_placeholder" placeholder="向量数据库存储路径">
+    </div>
+    
+    <div class="form-group">
+        <label for="embedding-function" class="form-label" data-i18n="settings.embedding_function">嵌入模型</label>
+        <select id="embedding-function" class="form-control">
+            <option value="{{ config.store_database.embedding_function }}">{{ config.store_database.embedding_function }}</option>
+        </select>
+    </div>
+    
+    <div class="form-group">
+        <label for="embedding-ollama-url" class="form-label" data-i18n="settings.embedding_ollama_url">嵌入模型Ollama URL</label>
+        <input type="text" id="embedding-ollama-url" class="form-control" value="{{ config.store_database.embedding_ollama_url }}" data-i18n-placeholder="settings.embedding_ollama_url_placeholder" placeholder="http://localhost:11434">
+        <small class="form-text text-muted" data-i18n="settings.embedding_ollama_url_description">设置嵌入模型专用的Ollama服务器地址</small>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="card-title" data-i18n="settings.neo4j_settings">Neo4j图数据库设置</h2>
+    <div class="form-group">
+        <label for="neo4j-uri" class="form-label" data-i18n="settings.neo4j_uri">Neo4j连接URI</label>
+        <input type="text" id="neo4j-uri" class="form-control" value="{{ config.neo4j.uri }}" data-i18n-placeholder="settings.neo4j_uri_placeholder" placeholder="bolt://localhost:7687">
+    </div>
+    
+    <div class="form-group">
+        <label for="neo4j-user" class="form-label" data-i18n="settings.neo4j_user">用户名</label>
+        <input type="text" id="neo4j-user" class="form-control" value="{{ config.neo4j.user }}" data-i18n-placeholder="settings.neo4j_user_placeholder" placeholder="neo4j">
+    </div>
+    
+    <div class="form-group">
+        <label for="neo4j-password" class="form-label" data-i18n="settings.neo4j_password">密码</label>
+        <input type="password" id="neo4j-password" class="form-control" value="{{ config.neo4j.password }}">
+    </div>
+    
+    <button id="test-neo4j-connection-btn" class="btn btn-secondary" data-i18n="settings.test_neo4j_connection">测试Neo4j连接</button>
+</div>
+
+<div class="card">
+    <h2 class="card-title" data-i18n="settings.model_settings">大模型设置</h2>
+    <div class="form-group">
+        <label for="model-type" class="form-label" data-i18n="settings.model_type">大模型类型</label>
+        <select id="model-type" class="form-control">
+            <option value="vanna" {% if config.model.type == 'vanna' %}selected{% endif %}>Vanna.AI</option>
+            <option value="ollama" {% if config.model.type == 'ollama' %}selected{% endif %}>Ollama</option>
+            <option value="openai" {% if config.model.type == 'openai' %}selected{% endif %}>OpenAI</option>
+        </select>
+    </div>
+    
+    <div id="vanna-settings" {% if config.model.type != 'vanna' %}style="display:none"{% endif %}>
+        <div class="form-group">
+            <label for="vanna-api-key" class="form-label">Vanna API Key</label>
+            <input type="password" id="vanna-api-key" class="form-control" value="{{ config.model.api_key }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="vanna-model-name" class="form-label">Vanna 模型名称</label>
+            <input type="text" id="vanna-model-name" class="form-control" value="{{ config.model.model_name }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="vanna-temperature" class="form-label">Temperature</label>
+            <input type="number" id="vanna-temperature" class="form-control" value="{{ config.model.temperature }}" min="0" max="2" step="0.1">
+        </div>
+    </div>
+    
+    <div id="ollama-settings" {% if config.model.type != 'ollama' %}style="display:none"{% endif %}>
+        <div class="form-group">
+            <label for="ollama-url" class="form-label">Ollama URL</label>
+            <input type="text" id="ollama-url" class="form-control" value="{{ config.model.ollama_url }}" placeholder="http://localhost:11434">
+        </div>
+        
+        <div class="form-group">
+            <label for="ollama-model" class="form-label">Ollama 模型名称</label>
+            <select id="ollama-model" class="form-control">
+                <option value="{{ config.model.ollama_model }}">{{ config.model.ollama_model }}</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="ollama-temperature" class="form-label">Temperature</label>
+            <input type="number" id="ollama-temperature" class="form-control" value="{{ config.model.temperature }}" min="0" max="2" step="0.1">
+        </div>
+        <div class="form-group">
+            <label for="ollama-system-prompt" class="form-label" data-i18n="settings.system_prompt">System Prompt</label>
+            <textarea id="ollama-system-prompt" class="form-control" rows="3">{{ config.model.system_prompt }}</textarea>
+            <small class="form-text text-muted" data-i18n="settings.system_prompt_description">设置系统提示词以指导模型行为。</small>
+        </div>
+        <div class="form-group">
+            <label for="ollama-num-ctx" class="form-label" data-i18n="settings.max_input_tokens">最大输入Token (num_ctx)</label>
+            <input type="number" id="ollama-num-ctx" class="form-control" value="{{ config.model.num_ctx }}" min="1" step="1">
+            <small class="form-text text-muted" data-i18n="settings.max_input_tokens_description_ollama">设置Ollama模型的最大上下文窗口大小（例如 128000）。</small>
+        </div>
+    </div>
+    
+    <div id="openai-settings" {% if config.model.type != 'openai' %}style="display:none"{% endif %}>
+        <div class="form-group">
+            <label for="openai-api-key" class="form-label">OpenAI API Key</label>
+            <input type="password" id="openai-api-key" class="form-control" value="{{ config.model.api_key }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="openai-model" class="form-label">OpenAI 模型名称</label>
+            <input type="text" id="openai-model" class="form-control" value="{{ config.model.model_name }}" placeholder="gpt-3.5-turbo">
+        </div>
+        
+        <div class="form-group">
+            <label for="openai-api-base" class="form-label">OpenAI API Base</label>
+            <input type="text" id="openai-api-base" class="form-control" value="{{ config.model.api_base }}" placeholder="https://api.openai.com/v1">
+        </div>
+        
+        <div class="form-group">
+            <label for="openai-temperature" class="form-label">Temperature</label>
+            <input type="number" id="openai-temperature" class="form-control" value="{{ config.model.temperature }}" min="0" max="2" step="0.1">
+        </div>
+        <div class="form-group">
+            <label for="openai-system-prompt" class="form-label" data-i18n="settings.system_prompt">System Prompt</label>
+            <textarea id="openai-system-prompt" class="form-control" rows="3">{{ config.model.system_prompt }}</textarea>
+            <small class="form-text text-muted" data-i18n="settings.system_prompt_description">设置系统提示词以指导模型行为。</small>
+        </div>
+        <div class="form-group">
+            <label for="openai-num-ctx" class="form-label" data-i18n="settings.max_input_tokens">最大输入Token (num_ctx)</label>
+            <input type="number" id="openai-num-ctx" class="form-control" value="{{ config.model.num_ctx }}" min="1" step="1">
+            <small class="form-text text-muted" data-i18n="settings.max_input_tokens_description_openai">设置OpenAI模型的最大上下文窗口大小（例如 16000）。</small>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="card-title" data-i18n="settings.naming_settings">会话自动命名设置</h2>
+    <div class="form-group">
+        <label for="naming-enabled" class="form-label" data-i18n="settings.naming_enabled">启用自动命名</label>
+        <div class="form-check form-switch">
+            <input type="checkbox" id="naming-enabled" class="form-check-input" {% if config.naming_model.enabled %}checked{% endif %}>
+        </div>
+        <small class="form-text text-muted" data-i18n="settings.naming_enabled_description">启用后，系统将根据对话内容自动为新会话生成名称</small>
+    </div>
+    
+    <div class="form-group">
+        <label for="naming-prompt-template" class="form-label" data-i18n="settings.naming_prompt_template">提示词模板</label>
+        <textarea id="naming-prompt-template" class="form-control" rows="3">{{ config.naming_model.prompt_template }}</textarea>
+        <small class="form-text text-muted" data-i18n="settings.naming_prompt_template_description">使用 {conversation} 作为对话内容的占位符</small>
+    </div>
+    
+    <div class="form-group">
+        <label for="naming-use-system-model" class="form-label" data-i18n="settings.naming_use_system_model">使用系统模型</label>
+        <div class="form-check form-switch">
+            <input type="checkbox" id="naming-use-system-model" class="form-check-input" {% if config.naming_model.use_system_model %}checked{% endif %}>
+        </div>
+        <small class="form-text text-muted" data-i18n="settings.naming_use_system_model_description">启用后，将使用系统配置的大模型来生成名称；禁用则使用下方配置的专用模型</small>
+    </div>
+    
+    <div id="naming-model-settings" {% if config.naming_model.use_system_model %}style="display:none"{% endif %}>
+        <div class="form-group">
+            <label for="naming-model-type" class="form-label" data-i18n="settings.naming_model_type">命名模型类型</label>
+            <select id="naming-model-type" class="form-control">
+                <option value="vanna" {% if config.naming_model.model_type == 'vanna' %}selected{% endif %}>Vanna.AI</option>
+                <option value="ollama" {% if config.naming_model.model_type == 'ollama' %}selected{% endif %}>Ollama</option>
+                <option value="openai" {% if config.naming_model.model_type == 'openai' %}selected{% endif %}>OpenAI</option>
+            </select>
+        </div>
+        
+        <div id="naming-vanna-settings" {% if config.naming_model.model_type != 'vanna' %}style="display:none"{% endif %}>
+            <div class="form-group">
+                <label for="naming-vanna-api-key" class="form-label">Vanna API Key</label>
+                <input type="password" id="naming-vanna-api-key" class="form-control" value="{{ config.naming_model.vanna_api_key }}">
+            </div>
+            
+            <div class="form-group">
+                <label for="naming-vanna-model-name" class="form-label">Vanna 模型名称</label>
+                <input type="text" id="naming-vanna-model-name" class="form-control" value="{{ config.naming_model.vanna_model_name }}">
+            </div>
+        </div>
+        
+        <div id="naming-ollama-settings" {% if config.naming_model.model_type != 'ollama' %}style="display:none"{% endif %}>
+            <div class="form-group">
+                <label for="naming-ollama-url" class="form-label">Ollama URL</label>
+                <input type="text" id="naming-ollama-url" class="form-control" value="{{ config.naming_model.ollama_url }}" placeholder="http://localhost:11434">
+            </div>
+            
+            <div class="form-group">
+                <label for="naming-ollama-model" class="form-label">Ollama 模型名称</label>
+                <select id="naming-ollama-model" class="form-control">
+                    <option value="{{ config.naming_model.ollama_model }}">{{ config.naming_model.ollama_model }}</option>
+                </select>
+                <button id="naming-load-ollama-models" class="btn btn-sm btn-secondary mt-1" data-i18n="settings.load_models">加载模型列表</button>
+            </div>
+        </div>
+        
+        <div id="naming-openai-settings" {% if config.naming_model.model_type != 'openai' %}style="display:none"{% endif %}>
+            <div class="form-group">
+                <label for="naming-openai-api-key" class="form-label">OpenAI API Key</label>
+                <input type="password" id="naming-openai-api-key" class="form-control" value="{{ config.naming_model.openai_api_key }}">
+            </div>
+            
+            <div class="form-group">
+                <label for="naming-openai-model" class="form-label">OpenAI 模型名称</label>
+                <input type="text" id="naming-openai-model" class="form-control" value="{{ config.naming_model.openai_model }}" placeholder="gpt-3.5-turbo">
+            </div>
+            
+            <div class="form-group">
+                <label for="naming-openai-api-base" class="form-label">OpenAI API Base</label>
+                <input type="text" id="naming-openai-api-base" class="form-control" value="{{ config.naming_model.openai_api_base }}" placeholder="https://api.openai.com/v1">
+            </div>
+        </div>
+    </div>
+</div>
+
+<button id="save-settings-btn" class="btn btn-primary" data-i18n="settings.save_settings">保存设置</button>
+{% endblock %}
+
+{% block additional_scripts %}
+<script>
+    $(document).ready(function() {
+        // 等待全局国际化初始化完成后再初始化设置页面
+        setTimeout(function() {
+            initializeSettingsI18n();
+        }, 100);
+        
+        // 语言切换事件
+        $('#interface-language').change(function() {
+            const selectedLang = $(this).val();
+            console.log('用户选择了语言:', selectedLang);
+            
+            // 立即更新localStorage
+            localStorage.setItem('language', selectedLang);
+            console.log('已更新localStorage语言设置:', selectedLang);
+            
+            // 尝试通过i18n系统切换语言
+            if (window.i18n && typeof window.i18n.setLanguage === 'function') {
+                console.log('调用i18n系统切换语言...');
+                const success = window.i18n.setLanguage(selectedLang);
+                console.log('i18n语言切换结果:', success);
+                
+                if (success) {
+                    // 触发保存语言设置到后端
+                    console.log('开始保存到后端配置...');
+                    saveLanguageSetting(selectedLang);
+                } else {
+                    console.error('i18n语言切换失败');
+                    // 显示错误消息
+                    const errorMsg = $('<div class="alert alert-warning" style="position: fixed; top: 20px; right: 20px; z-index: 9999;">语言切换失败，请刷新页面重试</div>');
+                    $('body').append(errorMsg);
+                    setTimeout(() => errorMsg.fadeOut(500, () => errorMsg.remove()), 3000);
+                }
+            } else {
+                console.error('i18n系统未初始化或缺少setLanguage方法');
+                // 仍然尝试保存到后端
+                saveLanguageSetting(selectedLang);
+            }
+        });
+        
+        // 监听语言切换事件，更新动态生成的内容
+        window.i18n.on('languageChanged', function(data) {
+            updateDynamicContent(data.language);
+        });
+        
+        // 数据库类型变更
+        $('#database-type').change(function() {
+            const dbType = $(this).val();
+            if (dbType === 'sqlite') {
+                $('#database-connection-settings').hide();
+                $('#database-name').attr('placeholder', 'SQLite数据库文件路径');
+            } else {
+                $('#database-connection-settings').show();
+                if (dbType === 'mysql') {
+                    $('#database-port').val($('#database-port').val() || '3306');
+                    $('#database-name').attr('placeholder', '数据库名称');
+                } else if (dbType === 'postgres') {
+                    $('#database-port').val($('#database-port').val() || '5432');
+                    $('#database-name').attr('placeholder', '数据库名称');
+                }
+            }
+        });
+        
+        // 加载Ollama模型列表
+        function loadOllamaModels(target = 'main') {
+            const ollamaUrl = target === 'naming' ? $('#naming-ollama-url').val() : $('#ollama-url').val();
+            $.ajax({
+                url: '/api/ollama-models',
+                method: 'GET',
+                data: { url: ollamaUrl },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        if (target === 'main') {
+                            // 更新主LLM模型列表
+                            const currentLLMModel = $('#ollama-model').val();
+                            $('#ollama-model').empty();
+                            response.models.forEach(function(model) {
+                                const option = $('<option>').val(model).text(model);
+                                if (model === currentLLMModel) {
+                                    option.prop('selected', true);
+                                }
+                                $('#ollama-model').append(option);
+                            });
+
+                            // 更新嵌入模型列表
+                            const currentEmbeddingModel = $('#embedding-function').val();
+                            $('#embedding-function').empty();
+                            response.models.forEach(function(model) {
+                                const option = $('<option>').val(model).text(model);
+                                if (model === currentEmbeddingModel) {
+                                    option.prop('selected', true);
+                                }
+                                $('#embedding-function').append(option);
+                            });
+                        } else if (target === 'naming') {
+                            // 更新命名模型列表
+                            const currentNamingModel = $('#naming-ollama-model').val();
+                            $('#naming-ollama-model').empty();
+                            response.models.forEach(function(model) {
+                                const option = $('<option>').val(model).text(model);
+                                if (model === currentNamingModel) {
+                                    option.prop('selected', true);
+                                }
+                                $('#naming-ollama-model').append(option);
+                            });
+                        }
+                    } else {
+                        alert('获取模型列表失败：' + response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('获取模型列表失败，请检查网络连接');
+                }
+            });
+        }
+
+        // Ollama URL变更时重新加载模型列表
+        $('#ollama-url').change(function() {
+            loadOllamaModels('main');
+        });
+        
+        // 命名Ollama URL变更时重新加载模型列表
+        $('#naming-ollama-url').change(function() {
+            loadOllamaModels('naming');
+        });
+        
+        // 命名加载Ollama模型按钮点击事件
+        $('#naming-load-ollama-models').click(function() {
+            loadOllamaModels('naming');
+        });
+        
+        // 测试Neo4j连接
+        $('#test-neo4j-connection-btn').click(function() {
+            const neo4jConfig = {
+                uri: $('#neo4j-uri').val(),
+                user: $('#neo4j-user').val(),
+                password: $('#neo4j-password').val()
+            };
+            
+            // 发送请求测试连接
+            $.ajax({
+                url: '/api/test-neo4j-connection',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(neo4jConfig),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert(response.message);
+                    } else {
+                        alert(response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('请求失败，请检查网络连接');
+                }
+            });
+        });
+        
+        // 模型类型变更
+        $('#model-type').change(function() {
+            const modelType = $(this).val();
+            $('#vanna-settings, #ollama-settings, #openai-settings').hide();
+            
+            if (modelType === 'vanna') {
+                $('#vanna-settings').show();
+            } else if (modelType === 'ollama') {
+                $('#ollama-settings').show();
+                loadOllamaModels('main');
+            } else if (modelType === 'openai') {
+                $('#openai-settings').show();
+            }
+        });
+        
+        // 命名模型类型变更
+        $('#naming-model-type').change(function() {
+            const modelType = $(this).val();
+            $('#naming-vanna-settings, #naming-ollama-settings, #naming-openai-settings').hide();
+            
+            if (modelType === 'vanna') {
+                $('#naming-vanna-settings').show();
+            } else if (modelType === 'ollama') {
+                $('#naming-ollama-settings').show();
+                loadOllamaModels('naming');
+            } else if (modelType === 'openai') {
+                $('#naming-openai-settings').show();
+            }
+        });
+        
+        // 使用系统模型切换
+        $('#naming-use-system-model').change(function() {
+            if ($(this).is(':checked')) {
+                $('#naming-model-settings').hide();
+            } else {
+                $('#naming-model-settings').show();
+                // 触发一次命名模型类型变更，确保显示正确的设置
+                $('#naming-model-type').trigger('change');
+            }
+        });
+        
+        // 测试数据库连接
+        $('#test-connection-btn').click(function() {
+            const dbConfig = getDBConfig();
+            
+            // 发送请求测试连接
+            $.ajax({
+                url: '/api/test-database-connection',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(dbConfig),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert(response.message);
+                    } else {
+                        alert(response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('请求失败，请检查网络连接');
+                }
+            });
+        });
+        
+        // 获取数据库配置
+        function getDBConfig() {
+            const dbType = $('#database-type').val();
+            const config = {
+                type: dbType
+            };
+            
+            if (dbType === 'sqlite') {
+                config.url = $('#database-name').val();
+            } else {
+                config.host = $('#database-host').val();
+                config.port = $('#database-port').val();
+                config.username = $('#database-username').val();
+                config.password = $('#database-password').val();
+                config.database_name = $('#database-name').val();
+            }
+            
+            return config;
+        }
+        
+        // 获取向量数据库配置
+        function getVectorDBConfig() {
+            return {
+                path: $('#vector-db-path').val(),
+                embedding_function: $('#embedding-function').val(),
+                embedding_ollama_url: $('#embedding-ollama-url').val()
+            };
+        }
+        
+        // 获取模型配置
+        function getModelConfig() {
+            const modelType = $('#model-type').val();
+            const config = {
+                type: modelType
+            };
+            
+            if (modelType === 'vanna') {
+                config.api_key = $('#vanna-api-key').val();
+                config.model_name = $('#vanna-model-name').val();
+                config.temperature = parseFloat($('#vanna-temperature').val());
+            } else if (modelType === 'ollama') {
+                config.ollama_url = $('#ollama-url').val();
+                config.ollama_model = $('#ollama-model').val();
+                config.temperature = parseFloat($('#ollama-temperature').val());
+                config.system_prompt = $('#ollama-system-prompt').val();
+                config.num_ctx = parseInt($('#ollama-num-ctx').val(), 10);
+            } else if (modelType === 'openai') {
+                config.api_key = $('#openai-api-key').val();
+                config.model_name = $('#openai-model').val();
+                config.api_base = $('#openai-api-base').val();
+                config.temperature = parseFloat($('#openai-temperature').val());
+                config.system_prompt = $('#openai-system-prompt').val();
+                config.num_ctx = parseInt($('#openai-num-ctx').val(), 10);
+            }
+            
+            return config;
+        }
+        
+        // 获取命名模型配置
+        function getNamingModelConfig() {
+            const useSystemModel = $('#naming-use-system-model').is(':checked');
+            const modelType = $('#naming-model-type').val();
+            
+            const config = {
+                enabled: $('#naming-enabled').is(':checked'),
+                prompt_template: $('#naming-prompt-template').val(),
+                use_system_model: useSystemModel,
+                model_type: modelType,
+                vanna_api_key: $('#naming-vanna-api-key').val(),
+                vanna_model_name: $('#naming-vanna-model-name').val(),
+                ollama_url: $('#naming-ollama-url').val(),
+                ollama_model: $('#naming-ollama-model').val(),
+                openai_api_key: $('#naming-openai-api-key').val(),
+                openai_model: $('#naming-openai-model').val(),
+                openai_api_base: $('#naming-openai-api-base').val()
+            };
+            
+            return config;
+        }
+        
+        // 获取Neo4j配置
+        function getNeo4jConfig() {
+            return {
+                uri: $('#neo4j-uri').val(),
+                user: $('#neo4j-user').val(),
+                password: $('#neo4j-password').val()
+            };
+        }
+        
+        // 保存设置
+        $('#save-settings-btn').click(function() {
+            const settings = {
+                database: getDBConfig(),
+                model: getModelConfig(),
+                store_database: getVectorDBConfig(),
+                naming_model: getNamingModelConfig(),
+                neo4j: getNeo4jConfig(),
+                language: getLanguageConfig()  // 添加语言配置
+            };
+            
+            // 发送请求保存设置
+            $.ajax({
+                url: '/api/save-settings',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(settings),
+                success: function(response) {
+                    if (response.status === 'success') {
+                        alert('设置保存成功！');
+                        // 重新加载页面以应用新设置
+                        window.location.reload();
+                    } else {
+                        alert('保存失败：' + response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('请求失败，请检查网络连接');
+                }
+            });
+        });
+        
+        // 获取语言配置
+        function getLanguageConfig() {
+            return {
+                language: $('#interface-language').val()
+            };
+        }
+        
+        // 初始化触发一次数据库类型变更
+        $('#database-type').trigger('change');
+        
+        // 初始化触发一次模型类型变更
+        $('#model-type').trigger('change');
+        
+        // 初始化触发一次命名模型类型变更
+        $('#naming-model-type').trigger('change');
+        
+        // 初始化触发一次使用系统模型切换
+        $('#naming-use-system-model').trigger('change');
+        
+        // 如果当前是Ollama类型，加载模型列表
+        if ($('#model-type').val() === 'ollama') {
+            loadOllamaModels('main');
+        }
+        
+        // 如果当前命名模型是Ollama类型且不使用系统模型，加载命名模型列表
+        if ($('#naming-model-type').val() === 'ollama' && !$('#naming-use-system-model').is(':checked')) {
+            loadOllamaModels('naming');
+        }
+        
+        // 国际化相关函数
+        function initializeSettingsI18n() {
+            console.log('初始化设置页面国际化...');
+            
+            // 首先从后端获取当前的语言设置
+            $.ajax({
+                url: '/api/get-language-setting',
+                method: 'GET',
+                success: function(response) {
+                    console.log('从后端获取的语言设置:', response);
+                    
+                    let backendLang = 'zh-CN'; // 默认值
+                    if (response.status === 'success' && response.language) {
+                        backendLang = response.language;
+                    }
+                    
+                    // 获取localStorage中的语言设置
+                    const localLang = localStorage.getItem('language');
+                    console.log('localStorage中的语言设置:', localLang);
+                    
+                    // 获取i18n系统当前的语言
+                    const i18nLang = window.i18n ? window.i18n.getCurrentLanguage() : 'zh-CN';
+                    console.log('i18n系统当前语言:', i18nLang);
+                    
+                    // 优先使用后端配置，其次是localStorage，最后是i18n系统
+                    let finalLang = backendLang;
+                    if (!finalLang && localLang) {
+                        finalLang = localLang;
+                    }
+                    if (!finalLang) {
+                        finalLang = i18nLang;
+                    }
+                    
+                    console.log('最终选择的语言:', finalLang);
+                    
+                    // 更新语言选择器的值
+                    $('#interface-language').val(finalLang);
+                    
+                    // 同步i18n系统
+                    if (window.i18n && typeof window.i18n.setLanguage === 'function') {
+                        window.i18n.setLanguage(finalLang);
+                        console.log('已同步i18n系统语言');
+                    }
+                    
+                    // 立即更新页面文本
+                    if (window.i18n && typeof window.i18n.updatePageText === 'function') {
+                        window.i18n.updatePageText();
+                        console.log('已更新页面文本');
+                    }
+                    
+                    // 设置页面语言属性
+                    if (window.i18n && typeof window.i18n.setPageLanguage === 'function') {
+                        window.i18n.setPageLanguage(finalLang);
+                        console.log('已设置页面语言属性');
+                    }
+                    
+                    // 如果后端和localStorage不一致，同步到localStorage
+                    if (localLang !== finalLang) {
+                        localStorage.setItem('language', finalLang);
+                        console.log('已同步localStorage语言设置');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.warn('获取后端语言设置失败，使用本地设置:', error);
+                    
+                    // 后端获取失败时，使用本地逻辑
+                    const currentLang = window.i18n ? window.i18n.getCurrentLanguage() : 'zh-CN';
+                    console.log('使用当前i18n语言:', currentLang);
+                    
+                    // 设置当前语言选择器的值
+                    $('#interface-language').val(currentLang);
+                    
+                    // 立即更新页面文本
+                    if (window.i18n && typeof window.i18n.updatePageText === 'function') {
+                        window.i18n.updatePageText();
+                    }
+                    
+                    // 设置页面语言属性
+                    if (window.i18n && typeof window.i18n.setPageLanguage === 'function') {
+                        window.i18n.setPageLanguage(currentLang);
+                    }
+                }
+            });
+        }
+        
+        function saveLanguageSetting(language) {
+            console.log('开始保存语言设置:', language);
+            
+            // 显示保存状态
+            const saveStatus = $('<div class="alert alert-info" style="position: fixed; top: 20px; right: 20px; z-index: 9999;">正在保存语言设置...</div>');
+            $('body').append(saveStatus);
+            
+            // 保存语言设置到后端配置
+            $.ajax({
+                url: '/api/save-language-setting',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ language: language }),
+                success: function(response) {
+                    console.log('API响应:', response);
+                    saveStatus.remove();
+                    
+                    if (response.status === 'success') {
+                        console.log('语言设置保存成功:', language);
+                        
+                        // 显示成功消息
+                        const successMsg = $('<div class="alert alert-success" style="position: fixed; top: 20px; right: 20px; z-index: 9999;">语言设置已保存成功！</div>');
+                        $('body').append(successMsg);
+                        setTimeout(() => successMsg.fadeOut(500, () => successMsg.remove()), 3000);
+                        
+                        // 验证配置文件是否正确更新
+                        setTimeout(() => {
+                            verifyLanguageSetting(language);
+                        }, 500);
+                    } else {
+                        console.error('保存失败:', response.message);
+                        
+                        // 显示错误消息
+                        const errorMsg = $('<div class="alert alert-danger" style="position: fixed; top: 20px; right: 20px; z-index: 9999;">保存失败: ' + response.message + '</div>');
+                        $('body').append(errorMsg);
+                        setTimeout(() => errorMsg.fadeOut(500, () => errorMsg.remove()), 5000);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('API请求失败:', {
+                        status: status,
+                        error: error,
+                        responseText: xhr.responseText
+                    });
+                    saveStatus.remove();
+                    
+                    // 显示错误消息
+                    const errorMsg = $('<div class="alert alert-danger" style="position: fixed; top: 20px; right: 20px; z-index: 9999;">网络错误，保存失败</div>');
+                    $('body').append(errorMsg);
+                    setTimeout(() => errorMsg.fadeOut(500, () => errorMsg.remove()), 5000);
+                }
+            });
+        }
+        
+        function verifyLanguageSetting(expectedLanguage) {
+            console.log('验证语言设置:', expectedLanguage);
+            
+            $.ajax({
+                url: '/api/get-language-setting',
+                method: 'GET',
+                success: function(response) {
+                    console.log('当前保存的语言设置:', response);
+                    
+                    if (response.status === 'success') {
+                        if (response.language === expectedLanguage) {
+                            console.log('✓ 语言设置验证成功');
+                        } else {
+                            console.warn('⚠ 语言设置验证失败 - 期望:', expectedLanguage, '实际:', response.language);
+                        }
+                    } else {
+                        console.warn('验证失败:', response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.warn('验证请求失败:', error);
+                }
+            });
+        }
+        
+        function updateDynamicContent(language) {
+            // 更新数据库名称输入框的placeholder
+            const dbType = $('#database-type').val();
+            let placeholderKey = 'settings.database_name_placeholder_sqlite';
+            if (dbType !== 'sqlite') {
+                placeholderKey = 'settings.database_name_placeholder_other';
+            }
+            $('#database-name').attr('placeholder', window.i18n.t(placeholderKey));
+            
+            // 更新页面标题
+            document.title = `WisdominDATA - ${window.i18n.t('settings.title')}`;
+            
+            // 更新HTML lang属性
+            window.i18n.setPageLanguage(language);
+            
+            // 重新翻译所有alert和confirm消息
+            updateAlertMessages();
+        }
+        
+        function updateAlertMessages() {
+            // 这个函数可以用来更新JavaScript中的alert等消息
+            // 当前设置页面主要使用alert显示消息，可以在这里统一处理
+        }
+    });
+</script>
+{% endblock %} 
