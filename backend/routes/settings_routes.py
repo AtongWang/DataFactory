@@ -242,8 +242,9 @@ def get_ollama_models():
                 {
                     "status": "error",
                     "message": f"Ollama服务返回错误状态码: {response.status_code}",
+                    "models": [],
                 }
-            ), 500
+            )
 
         models_data = response.json()
         model_names = [model["name"] for model in models_data.get("models", [])]
@@ -252,10 +253,14 @@ def get_ollama_models():
     except requests.exceptions.RequestException as e:
         app.logger.error(f"连接Ollama服务失败: {str(e)}")
         return jsonify(
-            {"status": "error", "message": f"连接Ollama服务失败: {str(e)}"}
-        ), 500
+            {
+                "status": "error",
+                "message": f"连接Ollama服务失败: {str(e)}",
+                "models": [],
+            }
+        )
     except Exception as e:
         app.logger.error(f"获取Ollama模型列表时发生错误: {str(e)}")
         return jsonify(
-            {"status": "error", "message": f"获取模型列表失败: {str(e)}"}
-        ), 500
+            {"status": "error", "message": f"获取模型列表失败: {str(e)}", "models": []}
+        )

@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import traceback
 import logging
+from backend.utils.openai_compat import strip_reasoning_content_tags
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class EnhancedVannaBase(VannaBase):
 
     def _clean_thinking_tags(self, response):
         """移除LLM响应中的<think>...</think>标签"""
-        return re.sub(r"<think>[\s\S]*?</think>", "", response).strip()
+        return strip_reasoning_content_tags(response).strip()
 
     def _extract_python_code(self, markdown_string: str) -> str:
         """从文本中提取Python代码，去除markdown格式和思考标签"""
@@ -84,6 +85,28 @@ class EnhancedVannaBase(VannaBase):
 
         return code
 
+    def _extract_invalid_plotly_property(self, error_message: str) -> str | None:
+        match = re.search(r"Bad property path:\s*([A-Za-z_][\w\.]*)", error_message)
+        if match:
+            return match.group(1)
+        return None
+
+    def _remove_plotly_property_from_code(self, code: str, prop_name: str) -> str:
+        escaped_prop = re.escape(prop_name)
+        code = re.sub(
+            rf"([\(,]\s*){escaped_prop}\s*=\s*([^,\)\n]+)\s*(?=[,\)])",
+            lambda m: "(" if m.group(1).strip() == "(" else m.group(1),
+            code,
+        )
+        code = re.sub(
+            rf"([\{{,]\s*)['\"]{escaped_prop}['\"]\s*:\s*([^,\}}\n]+)\s*(?=[,\}}])",
+            lambda m: "{" if m.group(1).strip() == "{" else m.group(1),
+            code,
+        )
+        code = re.sub(r",\s*\)", ")", code)
+        code = re.sub(r",\s*\}", "}", code)
+        return code
+
     def get_plotly_figure(
         self, plotly_code: str, df: pd.DataFrame, dark_mode: bool = True
     ) -> plotly.graph_objs.Figure:
@@ -102,11 +125,25 @@ class EnhancedVannaBase(VannaBase):
         plotly_code = self._clean_thinking_tags(plotly_code)
         plotly_code = self._sanitize_plotly_code(plotly_code)
 
-        ldict = {"df": df, "px": px, "go": go, "pd": pd}
-
         try:
-            # 执行代码
-            exec(plotly_code, globals(), ldict)
+            current_code = plotly_code
+            ldict = {"df": df, "px": px, "go": go, "pd": pd}
+            for _ in range(3):
+                try:
+                    exec(current_code, globals(), ldict)
+                    break
+                except ValueError as ve:
+                    invalid_prop = self._extract_invalid_plotly_property(str(ve))
+                    if invalid_prop:
+                        self.log(
+                            f"检测到非法Plotly属性: {invalid_prop}，自动移除后重试"
+                        )
+                        current_code = self._remove_plotly_property_from_code(
+                            current_code, invalid_prop
+                        )
+                        ldict = {"df": df, "px": px, "go": go, "pd": pd}
+                        continue
+                    raise
 
             # 1. 检查是否直接创建了fig变量
             fig = ldict.get("fig", None)

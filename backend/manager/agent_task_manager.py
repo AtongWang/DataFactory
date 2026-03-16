@@ -19,6 +19,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain.tools import Tool
 from datetime import datetime
 from langchain_core.exceptions import OutputParserException
+from backend.utils.openai_compat import normalize_openai_base_url
 
 TOOL_TRACKING_AVAILABLE = True
 
@@ -173,8 +174,8 @@ class AgentTaskManager:
                         model=openai_model,
                         temperature=final_temperature,
                         api_key=model_config.get("api_key"),
-                        base_url=model_config.get(
-                            "api_base", "https://api.openai.com/v1"
+                        base_url=normalize_openai_base_url(
+                            model_config.get("api_base", "https://api.openai.com/v1")
                         ),
                         request_timeout=60.0,  # 请求超时
                         max_retries=2,  # 自动重试
@@ -190,8 +191,8 @@ class AgentTaskManager:
                         model=openai_model,
                         temperature=final_temperature,  # DeepSeek使用更低的温度
                         api_key=model_config.get("api_key"),
-                        base_url=model_config.get(
-                            "api_base", "https://api.openai.com/v1"
+                        base_url=normalize_openai_base_url(
+                            model_config.get("api_base", "https://api.openai.com/v1")
                         ),
                         max_tokens=model_config.get("num_ctx", 25600),
                         request_timeout=60.0,  # 请求超时

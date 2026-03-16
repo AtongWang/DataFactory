@@ -8,6 +8,11 @@ from backend.services.vanna_service import vanna_manager
 from backend.utils.token_tracking import create_token_callback
 from backend.manager.langchain_graph_qa import GraphFewShotQAChain
 from langchain_ollama import ChatOllama, OllamaEmbeddings
+
+try:
+    from langchain_openai import OpenAIEmbeddings
+except ImportError:
+    OpenAIEmbeddings = None
 from langchain_neo4j import Neo4jGraph
 from backend.utils.db_utils import (
     create_kgqa_chat_session,
@@ -22,6 +27,13 @@ from backend.utils.db_utils import (
     get_saved_kgqa_queries,
     get_saved_kgqa_query,
     delete_saved_kgqa_query,
+)
+from backend.utils.openai_compat import (
+    normalize_openai_base_url,
+    extract_openai_title_text,
+    split_reasoning_content,
+    build_openai_naming_request_kwargs,
+    normalize_session_name_candidate,
 )
 from datetime import datetime
 from neo4j.time import DateTime, Date, Time, Duration
@@ -123,15 +135,31 @@ class KGQAManager:
         temperature = model_config.get("temperature", 0.7)
         system_prompt = model_config.get("system_prompt", "")
         # 初始化嵌入模型
-        embedding_ollama_url = config.get("store_database", {}).get(
+        embedding_config = config.get("store_database", {})
+        embedding_provider = embedding_config.get("embedding_provider", "ollama")
+        embedding_ollama_url = embedding_config.get(
             "embedding_ollama_url", "http://localhost:11434"
         )
-        embedding_model = config.get("store_database", {}).get(
-            "embedding_function", "bge-m3"
-        )
-        self.embeddings = OllamaEmbeddings(
-            model=embedding_model, base_url=embedding_ollama_url
-        )
+        embedding_model = embedding_config.get("embedding_function", "bge-m3")
+
+        if embedding_provider == "openai_compatible" and OpenAIEmbeddings is not None:
+            embedding_api_base = normalize_openai_base_url(
+                embedding_config.get("embedding_api_base", "https://api.openai.com/v1")
+            )
+
+            self.embeddings = OpenAIEmbeddings(
+                model=embedding_model,
+                api_key=embedding_config.get("embedding_api_key", ""),
+                base_url=embedding_api_base,
+            )
+        else:
+            if embedding_provider == "openai_compatible" and OpenAIEmbeddings is None:
+                logger.warning(
+                    "langchain_openai 未安装，嵌入模型回退到 OllamaEmbeddings"
+                )
+            self.embeddings = OllamaEmbeddings(
+                model=embedding_model, base_url=embedding_ollama_url
+            )
 
         # 创建token跟踪callback
         token_callback = None
@@ -202,7 +230,9 @@ class KGQAManager:
                 model=openai_model,
                 temperature=temperature,
                 api_key=model_config.get("api_key"),
-                base_url=model_config.get("api_base", "https://api.openai.com/v1"),
+                base_url=normalize_openai_base_url(
+                    model_config.get("api_base", "https://api.openai.com/v1")
+                ),
                 max_tokens=model_config.get("num_ctx", 25600),
                 request_timeout=60.0,  # 请求超时
                 max_retries=2,
@@ -465,8 +495,10 @@ class KGQAManager:
 
                         openai_client = OpenAI(
                             api_key=config.get("model", {}).get("api_key", ""),
-                            base_url=config.get("model", {}).get(
-                                "api_base", "https://api.openai.com/v1"
+                            base_url=normalize_openai_base_url(
+                                config.get("model", {}).get(
+                                    "api_base", "https://api.openai.com/v1"
+                                )
                             ),
                         )
 
@@ -477,12 +509,9 @@ class KGQAManager:
                                 "model_name", "gpt-3.5-turbo"
                             ),
                             messages=[{"role": "user", "content": prompt}],
-                            temperature=0.7,
-                            max_tokens=30,
+                            **build_openai_naming_request_kwargs(),
                         )
-                        session_name = (
-                            response.choices[0].message.content or ""
-                        ).strip()
+                        session_name = extract_openai_title_text(response)
                         logger.info(
                             f"会话 {session_id} OpenAI生成的名称: {session_name}"
                         )
@@ -572,8 +601,10 @@ class KGQAManager:
 
                         openai_client = OpenAI(
                             api_key=naming_model_config.get("openai_api_key", ""),
-                            base_url=naming_model_config.get(
-                                "openai_api_base", "https://api.openai.com/v1"
+                            base_url=normalize_openai_base_url(
+                                naming_model_config.get(
+                                    "openai_api_base", "https://api.openai.com/v1"
+                                )
                             ),
                         )
 
@@ -584,12 +615,9 @@ class KGQAManager:
                                 "openai_model", "gpt-3.5-turbo"
                             ),
                             messages=[{"role": "user", "content": prompt}],
-                            temperature=0.7,
-                            max_tokens=30,
+                            **build_openai_naming_request_kwargs(),
                         )
-                        session_name = (
-                            response.choices[0].message.content or ""
-                        ).strip()
+                        session_name = extract_openai_title_text(response)
                         logger.info(
                             f"会话 {session_id} 独立OpenAI生成的名称: {session_name}"
                         )
@@ -641,16 +669,20 @@ class KGQAManager:
                     except Exception as e:
                         logger.error(f"使用命名配置的Vanna生成会话名称失败: {str(e)}")
 
+            if not session_name:
+                session_name = normalize_session_name_candidate(first_message or "")
+                if session_name:
+                    logger.info(
+                        f"会话 {session_id} 使用首条消息回退生成名称: {session_name}"
+                    )
+
             # 如果成功生成名称，更新会话
             if session_name:
-                # 首先清理<think>标签及其内容
-                session_name = re.sub(
-                    r"<think>.*?</think>", "", session_name, flags=re.DOTALL
-                ).strip()
+                session_name = normalize_session_name_candidate(session_name)
 
                 # 限制长度
-                if len(session_name) > 50:
-                    session_name = session_name[:47] + "..."
+                if len(session_name) > 20:
+                    session_name = session_name[:20].strip()
 
                 # 移除可能的引号（模型可能返回带引号的文本）
                 session_name = session_name.strip("\"'")
@@ -787,8 +819,10 @@ class KGQAManager:
                         model=model_name,
                         temperature=temperature,
                         api_key=current_config.get("model", {}).get("api_key"),
-                        base_url=current_config.get("model", {}).get(
-                            "api_base", "https://api.openai.com/v1"
+                        base_url=normalize_openai_base_url(
+                            current_config.get("model", {}).get(
+                                "api_base", "https://api.openai.com/v1"
+                            )
                         ),
                         max_tokens=current_config.get("model", {}).get(
                             "num_ctx", 25600
@@ -873,14 +907,9 @@ class KGQAManager:
 
                 # 尝试从content中提取思考过程
                 if content:
-                    # 检查是否包含<think>标签
-                    think_match = re.search(r"<think>(.*?)</think>", content, re.DOTALL)
-                    if think_match:
-                        thinking = think_match.group(1).strip()
-                        # 从content中移除思考过程
-                        clean_content = re.sub(
-                            r"<think>.*?</think>", "", content, flags=re.DOTALL
-                        ).strip()
+                    clean_content, extracted_thinking = split_reasoning_content(content)
+                    if extracted_thinking:
+                        thinking = extracted_thinking
                         if clean_content:
                             content = clean_content
 
@@ -1018,8 +1047,10 @@ class KGQAManager:
                         model=model_name,
                         temperature=temperature,
                         api_key=current_config.get("model", {}).get("api_key"),
-                        base_url=current_config.get("model", {}).get(
-                            "api_base", "https://api.openai.com/v1"
+                        base_url=normalize_openai_base_url(
+                            current_config.get("model", {}).get(
+                                "api_base", "https://api.openai.com/v1"
+                            )
                         ),
                         max_tokens=current_config.get("model", {}).get(
                             "num_ctx", 25600
@@ -1137,12 +1168,9 @@ class KGQAManager:
             }
 
             if content:
-                think_match = re.search(r"<think>(.*?)</think>", content, re.DOTALL)
-                if think_match:
-                    thinking = think_match.group(1).strip()
-                    clean_content = re.sub(
-                        r"<think>.*?</think>", "", content, flags=re.DOTALL
-                    ).strip()
+                clean_content, extracted_thinking = split_reasoning_content(content)
+                if extracted_thinking:
+                    thinking = extracted_thinking
                     if clean_content:
                         content = clean_content
 
@@ -2558,12 +2586,11 @@ class KGQAManager:
 
             # 6. 提取思考过程
             if explanation:
-                think_match = re.search(r"<think>(.*?)</think>", explanation, re.DOTALL)
-                if think_match:
-                    thinking = think_match.group(1).strip()
-                    clean_explanation = re.sub(
-                        r"<think>.*?</think>", "", explanation, flags=re.DOTALL
-                    ).strip()
+                clean_explanation, extracted_thinking = split_reasoning_content(
+                    explanation
+                )
+                if extracted_thinking:
+                    thinking = extracted_thinking
                     if clean_explanation:
                         explanation = clean_explanation
 

@@ -1181,6 +1181,33 @@
     let currentMessages = [];
     let charts = {};
     let allTrainingData = []; // Store all training data
+    let plotlyLoadPromise = null;
+
+    function ensurePlotlyReady() {
+        if (typeof window.Plotly !== 'undefined') {
+            return Promise.resolve(true);
+        }
+
+        if (plotlyLoadPromise) {
+            return plotlyLoadPromise;
+        }
+
+        plotlyLoadPromise = new Promise((resolve) => {
+            const fallbackScript = document.createElement('script');
+            fallbackScript.src = 'https://cdn.plot.ly/plotly-3.0.1.min.js';
+            fallbackScript.onload = function() {
+                console.warn('本地 Plotly 缺失，已使用 CDN 回退加载');
+                resolve(typeof window.Plotly !== 'undefined');
+            };
+            fallbackScript.onerror = function() {
+                console.error('Plotly 本地与 CDN 均加载失败');
+                resolve(false);
+            };
+            document.head.appendChild(fallbackScript);
+        });
+
+        return plotlyLoadPromise;
+    }
     
     $(document).ready(function() {
         // 初始化状态变量
@@ -1729,6 +1756,7 @@
                             </div>
                         </div>
                         <div class="explanation-text" id="streaming-content-${streamingMessageId}"></div>
+                        <div id="streaming-thinking-${streamingMessageId}"></div>
                     </div>
                 </div>
             </div>
@@ -1740,6 +1768,7 @@
         addTypingIndicator();
             
         const streamingContentEl = $(`#streaming-content-${streamingMessageId}`);
+        const streamingThinkingEl = $(`#streaming-thinking-${streamingMessageId}`);
         const streamStatusTextEl = $(`#stream-status-text-${streamingMessageId}`);
         const streamStatusPercentEl = $(`#stream-status-percent-${streamingMessageId}`);
         const streamProgressBarEl = $(`#stream-progress-bar-${streamingMessageId}`);
@@ -1777,6 +1806,36 @@
                 scrollToBottom();
                 renderScheduled = false;
             });
+        }
+
+        function renderStreamingThinking(thinkingText) {
+            const text = (thinkingText || '').trim();
+            if (!text) {
+                streamingThinkingEl.empty();
+                return;
+            }
+            const safeText = $('<div>').text(text).html();
+            streamingThinkingEl.html(`
+                <div class="thinking-container mt-3">
+                    <div class="accordion" id="streaming-thinking-accordion-${streamingMessageId}">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="streaming-thinking-header-${streamingMessageId}">
+                                <button class="accordion-button collapsed" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#streaming-thinking-body-${streamingMessageId}"
+                                        aria-expanded="false" aria-controls="streaming-thinking-body-${streamingMessageId}">
+                                    <i class="fas fa-brain me-2"></i> ${i18nHelper.t('database_qa.thinking_process')}
+                                </button>
+                            </h2>
+                            <div id="streaming-thinking-body-${streamingMessageId}" class="accordion-collapse collapse"
+                                 aria-labelledby="streaming-thinking-header-${streamingMessageId}" data-bs-parent="#streaming-thinking-accordion-${streamingMessageId}">
+                                <div class="accordion-body thinking-content">
+                                    <pre>${safeText}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `);
         }
 
         function updateStreamStatus(message, progress, done = false) {
@@ -1821,6 +1880,9 @@
                         if (event.payload && event.payload.explanation) {
                             streamedText = event.payload.explanation;
                             renderStreamingMarkdown(true);
+                        }
+                        if (event.payload && event.payload.thinking) {
+                            renderStreamingThinking(event.payload.thinking);
                         }
                         return;
                     }
@@ -2109,6 +2171,25 @@
     }
     
     // 渲染消息
+    function extractReasoningFromText(rawText) {
+        if (typeof rawText !== 'string' || !rawText.trim()) {
+            return { cleanText: rawText, thinking: null };
+        }
+        const reasoningParts = [];
+        const cleanText = rawText.replace(/<(think|analysis)\b[^>]*>([\s\S]*?)<\/\1>/ig, function(_, __, inner) {
+            const snippet = (inner || '').trim();
+            if (snippet) {
+                reasoningParts.push(snippet);
+            }
+            return '';
+        }).replace(/\n{3,}/g, '\n\n').trim();
+
+        return {
+            cleanText,
+            thinking: reasoningParts.length ? reasoningParts.join('\n\n') : null
+        };
+    }
+
     function renderMessages(messages) {
         // 清除旧图表
         charts = {};
@@ -2159,6 +2240,12 @@
                     (typeof message.visualization === 'string' && message.visualization.trim() !== '')
                 );
                 const tabsId = `result-tabs-${message.id}`;
+                const explanationSource = message.content || message.explanation || i18nHelper.t('database_qa.received');
+                const extractedReasoning = extractReasoningFromText(explanationSource);
+                const displayThinking = (message.thinking && message.thinking.trim())
+                    ? message.thinking
+                    : extractedReasoning.thinking;
+                const displayExplanation = extractedReasoning.cleanText || explanationSource;
                 
                 // 调试信息
                 console.log(`消息 ${message.id} 数据状态:`, {
@@ -2177,7 +2264,7 @@
                         <div class="message-bubble">
                             <div class="message-content">
                                 <!-- 1. 如果有思考过程，显示可折叠框（移动到解释文本之前） -->
-                                ${message.thinking ? `
+                                ${displayThinking ? `
                                 <div class="thinking-container mb-3">
                                     <div class="accordion" id="thinking-${message.id}">
                                         <div class="accordion-item">
@@ -2191,7 +2278,7 @@
                                             <div id="thinking-body-${message.id}" class="accordion-collapse collapse" 
                                                  aria-labelledby="thinking-header-${message.id}" data-bs-parent="#thinking-${message.id}">
                                                 <div class="accordion-body thinking-content">
-                                                    <pre>${message.thinking}</pre>
+                                                    <pre>${displayThinking}</pre>
                                                 </div>
                                             </div>
                                         </div>
@@ -2200,7 +2287,7 @@
                                 ` : ''}
                                 
                                 <!-- 2. 显示解释文本 -->
-                                <div class="explanation-text">${renderMarkdown(message.content || message.explanation || i18nHelper.t('database_qa.received'))}</div>
+                                <div class="explanation-text">${renderMarkdown(displayExplanation)}</div>
                                 
                                 <!-- 3. 条件性渲染标签页 -->
                                 ${ (hasSql || hasResult || hasVisualization) ? `
@@ -2341,6 +2428,17 @@
         
         // 获取图表容器DOM元素
         const chartElement = chartContainer[0];
+
+        if (typeof window.Plotly === 'undefined') {
+            ensurePlotlyReady().then((loaded) => {
+                if (!loaded) {
+                    chartContainer.html('<div class="alert alert-warning">图表库加载失败，无法渲染图表。请检查 static/js/vendor/plotly.min.js 或网络连接。</div>');
+                    return;
+                }
+                renderMessageChart(messageId, visualization);
+            });
+            return;
+        }
         
         // 清空现有图表
         Plotly.purge(chartElement);

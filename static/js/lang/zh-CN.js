@@ -77,7 +77,11 @@
         'settings.vector_database_settings': '向量数据库设置',
         'settings.vector_db_path': '向量数据库路径',
         'settings.vector_db_path_placeholder': '向量数据库存储路径',
+        'settings.embedding_provider': '嵌入服务类型',
         'settings.embedding_function': '嵌入模型',
+        'settings.embedding_api_key': '嵌入 API Key',
+        'settings.embedding_api_base': '嵌入 API Base',
+        'settings.embedding_api_base_placeholder': 'https://api.openai.com/v1',
         
         'settings.neo4j_settings': 'Neo4j图数据库设置',
         'settings.neo4j_uri': 'Neo4j连接URI',

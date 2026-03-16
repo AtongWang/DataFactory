@@ -64,18 +64,41 @@
         <label for="vector-db-path" class="form-label" data-i18n="settings.vector_db_path">向量数据库路径</label>
         <input type="text" id="vector-db-path" class="form-control" value="{{ config.store_database.path }}" data-i18n-placeholder="settings.vector_db_path_placeholder" placeholder="向量数据库存储路径">
     </div>
-    
+
     <div class="form-group">
-        <label for="embedding-function" class="form-label" data-i18n="settings.embedding_function">嵌入模型</label>
-        <select id="embedding-function" class="form-control">
-            <option value="{{ config.store_database.embedding_function }}">{{ config.store_database.embedding_function }}</option>
+        <label for="embedding-provider" class="form-label" data-i18n="settings.embedding_provider">嵌入服务类型</label>
+        <select id="embedding-provider" class="form-control">
+            <option value="ollama" {% if config.store_database.embedding_provider != 'openai_compatible' %}selected{% endif %}>Ollama</option>
+            <option value="openai_compatible" {% if config.store_database.embedding_provider == 'openai_compatible' %}selected{% endif %}>OpenAI Compatible</option>
         </select>
     </div>
     
     <div class="form-group">
-        <label for="embedding-ollama-url" class="form-label" data-i18n="settings.embedding_ollama_url">嵌入模型Ollama URL</label>
-        <input type="text" id="embedding-ollama-url" class="form-control" value="{{ config.store_database.embedding_ollama_url }}" data-i18n-placeholder="settings.embedding_ollama_url_placeholder" placeholder="http://localhost:11434">
-        <small class="form-text text-muted" data-i18n="settings.embedding_ollama_url_description">设置嵌入模型专用的Ollama服务器地址</small>
+        <label for="embedding-function" class="form-label" data-i18n="settings.embedding_function">嵌入模型</label>
+        <input type="text" id="embedding-function" class="form-control" list="embedding-model-options" value="{{ config.store_database.embedding_function }}" placeholder="bge-m3 / text-embedding-3-small">
+        <datalist id="embedding-model-options">
+            <option value="{{ config.store_database.embedding_function }}"></option>
+        </datalist>
+    </div>
+    
+    <div id="embedding-ollama-settings">
+        <div class="form-group">
+            <label for="embedding-ollama-url" class="form-label" data-i18n="settings.embedding_ollama_url">嵌入模型Ollama URL</label>
+            <input type="text" id="embedding-ollama-url" class="form-control" value="{{ config.store_database.embedding_ollama_url }}" data-i18n-placeholder="settings.embedding_ollama_url_placeholder" placeholder="http://localhost:11434">
+            <small class="form-text text-muted" data-i18n="settings.embedding_ollama_url_description">设置嵌入模型专用的Ollama服务器地址</small>
+        </div>
+        <button id="load-embedding-models" type="button" class="btn btn-secondary" data-i18n="settings.load_models">加载模型列表</button>
+    </div>
+
+    <div id="embedding-openai-settings" style="display:none">
+        <div class="form-group">
+            <label for="embedding-api-key" class="form-label" data-i18n="settings.embedding_api_key">Embedding API Key</label>
+            <input type="password" id="embedding-api-key" class="form-control" value="{{ config.store_database.embedding_api_key }}">
+        </div>
+        <div class="form-group">
+            <label for="embedding-api-base" class="form-label" data-i18n="settings.embedding_api_base">Embedding API Base</label>
+            <input type="text" id="embedding-api-base" class="form-control" value="{{ config.store_database.embedding_api_base }}" data-i18n-placeholder="settings.embedding_api_base_placeholder" placeholder="https://api.openai.com/v1">
+        </div>
     </div>
 </div>
 
@@ -336,9 +359,25 @@
             }
         });
         
+        let isInitializingSettings = true;
+
         // 加载Ollama模型列表
-        function loadOllamaModels(target = 'main') {
+        function loadOllamaModels(target = 'main', silent = false) {
+            if (target === 'main' && $('#model-type').val() !== 'ollama') {
+                return;
+            }
+            if (target === 'naming') {
+                if ($('#naming-use-system-model').is(':checked')) {
+                    return;
+                }
+                if ($('#naming-model-type').val() !== 'ollama') {
+                    return;
+                }
+            }
             const ollamaUrl = target === 'naming' ? $('#naming-ollama-url').val() : $('#ollama-url').val();
+            if (!ollamaUrl) {
+                return;
+            }
             $.ajax({
                 url: '/api/ollama-models',
                 method: 'GET',
@@ -357,16 +396,6 @@
                                 $('#ollama-model').append(option);
                             });
 
-                            // 更新嵌入模型列表
-                            const currentEmbeddingModel = $('#embedding-function').val();
-                            $('#embedding-function').empty();
-                            response.models.forEach(function(model) {
-                                const option = $('<option>').val(model).text(model);
-                                if (model === currentEmbeddingModel) {
-                                    option.prop('selected', true);
-                                }
-                                $('#embedding-function').append(option);
-                            });
                         } else if (target === 'naming') {
                             // 更新命名模型列表
                             const currentNamingModel = $('#naming-ollama-model').val();
@@ -380,11 +409,15 @@
                             });
                         }
                     } else {
-                        alert('获取模型列表失败：' + response.message);
+                        if (!silent) {
+                            alert('获取模型列表失败：' + response.message);
+                        }
                     }
                 },
                 error: function(xhr, status, error) {
-                    alert('获取模型列表失败，请检查网络连接');
+                    if (!silent) {
+                        alert('获取模型列表失败，请检查网络连接');
+                    }
                 }
             });
         }
@@ -402,6 +435,68 @@
         // 命名加载Ollama模型按钮点击事件
         $('#naming-load-ollama-models').click(function() {
             loadOllamaModels('naming');
+        });
+
+        function loadEmbeddingModels(silent = false) {
+            if ($('#embedding-provider').val() !== 'ollama') {
+                return;
+            }
+            const ollamaUrl = $('#embedding-ollama-url').val();
+            if (!ollamaUrl) {
+                return;
+            }
+            $.ajax({
+                url: '/api/ollama-models',
+                method: 'GET',
+                data: { url: ollamaUrl },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        const currentEmbeddingModel = $('#embedding-function').val();
+                        const modelOptions = $('#embedding-model-options');
+                        modelOptions.empty();
+                        response.models.forEach(function(model) {
+                            modelOptions.append($('<option>').val(model));
+                        });
+                        if (currentEmbeddingModel) {
+                            $('#embedding-function').val(currentEmbeddingModel);
+                        }
+                    } else {
+                        if (!silent) {
+                            alert('获取模型列表失败：' + response.message);
+                        }
+                    }
+                },
+                error: function() {
+                    if (!silent) {
+                        alert('获取模型列表失败，请检查网络连接');
+                    }
+                }
+            });
+        }
+
+        function toggleEmbeddingProviderSettings() {
+            const embeddingProvider = $('#embedding-provider').val();
+            if (embeddingProvider === 'openai_compatible') {
+                $('#embedding-openai-settings').show();
+                $('#embedding-ollama-settings').hide();
+            } else {
+                $('#embedding-openai-settings').hide();
+                $('#embedding-ollama-settings').show();
+            }
+        }
+
+        $('#embedding-provider').change(function() {
+            toggleEmbeddingProviderSettings();
+        });
+
+        $('#embedding-ollama-url').change(function() {
+            if ($('#embedding-provider').val() === 'ollama') {
+                loadEmbeddingModels();
+            }
+        });
+
+        $('#load-embedding-models').click(function() {
+            loadEmbeddingModels();
         });
         
         // 测试Neo4j连接
@@ -440,7 +535,7 @@
                 $('#vanna-settings').show();
             } else if (modelType === 'ollama') {
                 $('#ollama-settings').show();
-                loadOllamaModels('main');
+                loadOllamaModels('main', isInitializingSettings);
             } else if (modelType === 'openai') {
                 $('#openai-settings').show();
             }
@@ -455,7 +550,7 @@
                 $('#naming-vanna-settings').show();
             } else if (modelType === 'ollama') {
                 $('#naming-ollama-settings').show();
-                loadOllamaModels('naming');
+                loadOllamaModels('naming', true);
             } else if (modelType === 'openai') {
                 $('#naming-openai-settings').show();
             }
@@ -520,7 +615,10 @@
             return {
                 path: $('#vector-db-path').val(),
                 embedding_function: $('#embedding-function').val(),
-                embedding_ollama_url: $('#embedding-ollama-url').val()
+                embedding_provider: $('#embedding-provider').val(),
+                embedding_ollama_url: $('#embedding-ollama-url').val(),
+                embedding_api_key: $('#embedding-api-key').val(),
+                embedding_api_base: $('#embedding-api-base').val()
             };
         }
         
@@ -628,22 +726,22 @@
         
         // 初始化触发一次模型类型变更
         $('#model-type').trigger('change');
-        
-        // 初始化触发一次命名模型类型变更
-        $('#naming-model-type').trigger('change');
-        
+
+        // 初始化触发一次嵌入提供商类型变更
+        $('#embedding-provider').trigger('change');
+
         // 初始化触发一次使用系统模型切换
         $('#naming-use-system-model').trigger('change');
         
-        // 如果当前是Ollama类型，加载模型列表
-        if ($('#model-type').val() === 'ollama') {
-            loadOllamaModels('main');
+        // 初始化触发一次命名模型类型变更
+        $('#naming-model-type').trigger('change');
+
+        // 如果嵌入提供商为Ollama，加载嵌入模型列表
+        if ($('#embedding-provider').val() === 'ollama') {
+            loadEmbeddingModels(true);
         }
-        
-        // 如果当前命名模型是Ollama类型且不使用系统模型，加载命名模型列表
-        if ($('#naming-model-type').val() === 'ollama' && !$('#naming-use-system-model').is(':checked')) {
-            loadOllamaModels('naming');
-        }
+
+        isInitializingSettings = false;
         
         // 国际化相关函数
         function initializeSettingsI18n() {

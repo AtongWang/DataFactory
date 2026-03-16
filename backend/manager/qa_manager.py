@@ -20,6 +20,13 @@ from backend.utils.db_utils import (
     delete_saved_query,
 )
 import datetime
+from backend.utils.openai_compat import (
+    normalize_openai_base_url,
+    split_reasoning_content,
+    strip_reasoning_content_tags,
+    build_openai_naming_request_kwargs,
+    normalize_session_name_candidate as normalize_session_name_candidate_util,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +97,118 @@ class QAManager:
             return en_message
         else:
             return zh_message
+
+    def _fallback_session_name(self, first_message):
+        if not first_message:
+            logger.info("会话命名回退: 首条消息为空，返回空名称")
+            return ""
+        raw_message = str(first_message)
+        logger.info(f"会话命名回退: 原始首条消息: {raw_message[:120]}")
+        name = strip_reasoning_content_tags(str(first_message))
+        logger.info(f"会话命名回退: 去除思考标签后: {name[:120]}")
+        name = re.sub(r"\s+", " ", name).strip()
+        name = name.strip("\"'")
+        if len(name) > 20:
+            name = name[:20].strip()
+            logger.info(f"会话命名回退: 截断到20字符: {name}")
+        logger.info(f"会话命名回退: 最终回退名称: {name}")
+        return name
+
+    def _extract_title_from_openai_response(self, response, first_message):
+        def _safe_get(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
+        def _normalize_title(value):
+            if isinstance(value, str):
+                return value.strip()
+            if isinstance(value, list):
+                parts = []
+                for item in value:
+                    if isinstance(item, dict):
+                        for field in ("text", "content", "output_text"):
+                            candidate = item.get(field)
+                            if isinstance(candidate, str) and candidate.strip():
+                                parts.append(candidate.strip())
+                    elif isinstance(item, str) and item.strip():
+                        parts.append(item.strip())
+                return "\n".join(parts).strip()
+            return ""
+
+        choices = _safe_get(response, "choices", []) or []
+        finish_reason = ""
+        usage = _safe_get(response, "usage")
+        if choices:
+            finish_reason = _safe_get(choices[0], "finish_reason", "") or ""
+        logger.info(
+            "会话命名OpenAI响应概览: choices=%s, finish_reason=%s, usage=%s",
+            len(choices),
+            finish_reason,
+            usage,
+        )
+        if not choices:
+            logger.info("会话命名OpenAI响应为空: 进入首条消息回退")
+            return self._fallback_session_name(first_message)
+
+        first_choice = choices[0]
+        message = _safe_get(first_choice, "message")
+        logger.info(
+            "会话命名OpenAI首个choice: has_message=%s, has_text=%s",
+            message is not None,
+            bool(_safe_get(first_choice, "text")),
+        )
+        title = ""
+        if message is not None:
+            reasoning_preview = _safe_get(message, "reasoning_content")
+            if isinstance(reasoning_preview, str) and reasoning_preview:
+                logger.info(
+                    "会话命名OpenAI reasoning_content预览: %s",
+                    reasoning_preview[:120],
+                )
+            for field in ("content", "output_text", "text"):
+                field_value = _safe_get(message, field)
+                title = _normalize_title(field_value)
+                if isinstance(field_value, str):
+                    logger.info(
+                        "会话命名OpenAI字段检查: message.%s长度=%s, 归一化后长度=%s",
+                        field,
+                        len(field_value),
+                        len(title),
+                    )
+                else:
+                    logger.info(
+                        "会话命名OpenAI字段检查: message.%s类型=%s, 归一化后长度=%s",
+                        field,
+                        type(field_value).__name__,
+                        len(title),
+                    )
+                if title:
+                    logger.info(
+                        "会话命名OpenAI命中字段: message.%s, 值=%s",
+                        field,
+                        title[:120],
+                    )
+                    break
+
+        if not title:
+            choice_text = _safe_get(first_choice, "text")
+            title = _normalize_title(choice_text)
+            logger.info(
+                "会话命名OpenAI回退字段: choice.text类型=%s, 归一化后长度=%s",
+                type(choice_text).__name__,
+                len(title),
+            )
+
+        if not title:
+            logger.info("会话命名OpenAI未提取到标题: 进入首条消息回退")
+            return self._fallback_session_name(first_message)
+
+        logger.info(f"会话命名OpenAI提取到标题: {title[:120]}")
+        return title
+
+    def _normalize_session_name_candidate(self, raw_name):
+        return normalize_session_name_candidate_util(raw_name)
 
     def _normalize_visualization_text(self, content, visualization):
         if not content or not isinstance(content, str):
@@ -314,24 +433,33 @@ class QAManager:
 
                         openai_client = OpenAI(
                             api_key=config.get("model", {}).get("api_key", ""),
-                            base_url=config.get("model", {}).get(
-                                "api_base", "https://api.openai.com/v1"
+                            base_url=normalize_openai_base_url(
+                                config.get("model", {}).get(
+                                    "api_base", "https://api.openai.com/v1"
+                                )
                             ),
                         )
 
                         logger.info(f"会话 {session_id} 使用OpenAI生成名称")
+                        logger.info(
+                            "会话 %s 命名请求参数: model=%s, max_tokens=%s, temperature=%s, enable_thinking=%s",
+                            session_id,
+                            config.get("model", {}).get("model_name", "gpt-3.5-turbo"),
+                            80,
+                            0.7,
+                            False,
+                        )
 
                         response = openai_client.chat.completions.create(
                             model=config.get("model", {}).get(
                                 "model_name", "gpt-3.5-turbo"
                             ),
                             messages=[{"role": "user", "content": prompt}],
-                            temperature=0.7,
-                            max_tokens=30,
+                            **build_openai_naming_request_kwargs(),
                         )
-                        session_name = (
-                            response.choices[0].message.content or ""
-                        ).strip()
+                        session_name = self._extract_title_from_openai_response(
+                            response, first_message
+                        )
                         logger.info(
                             f"会话 {session_id} OpenAI生成的名称: {session_name}"
                         )
@@ -420,24 +548,33 @@ class QAManager:
 
                         openai_client = OpenAI(
                             api_key=naming_model_config.get("openai_api_key", ""),
-                            base_url=naming_model_config.get(
-                                "openai_api_base", "https://api.openai.com/v1"
+                            base_url=normalize_openai_base_url(
+                                naming_model_config.get(
+                                    "openai_api_base", "https://api.openai.com/v1"
+                                )
                             ),
                         )
 
                         logger.info(f"会话 {session_id} 使用独立OpenAI生成名称")
+                        logger.info(
+                            "会话 %s 独立命名请求参数: model=%s, max_tokens=%s, temperature=%s, enable_thinking=%s",
+                            session_id,
+                            naming_model_config.get("openai_model", "gpt-3.5-turbo"),
+                            80,
+                            0.7,
+                            False,
+                        )
 
                         response = openai_client.chat.completions.create(
                             model=naming_model_config.get(
                                 "openai_model", "gpt-3.5-turbo"
                             ),
                             messages=[{"role": "user", "content": prompt}],
-                            temperature=0.7,
-                            max_tokens=30,
+                            **build_openai_naming_request_kwargs(),
                         )
-                        session_name = (
-                            response.choices[0].message.content or ""
-                        ).strip()
+                        session_name = self._extract_title_from_openai_response(
+                            response, first_message
+                        )
                         logger.info(
                             f"会话 {session_id} 独立OpenAI生成的名称: {session_name}"
                         )
@@ -489,19 +626,33 @@ class QAManager:
                     except Exception as e:
                         logger.error(f"使用命名配置的Vanna生成会话名称失败: {str(e)}")
 
+            if not session_name:
+                session_name = self._fallback_session_name(first_message)
+                if session_name:
+                    logger.info(
+                        f"会话 {session_id} 使用首条消息回退生成名称: {session_name}"
+                    )
+
             # 如果成功生成名称，更新会话
             if session_name:
-                # 首先清理<think>标签及其内容
-                session_name = re.sub(
-                    r"<think>.*?</think>", "", session_name, flags=re.DOTALL
-                ).strip()
+                logger.info(f"会话 {session_id} 命名清洗前: {session_name[:120]}")
+                session_name = self._normalize_session_name_candidate(session_name)
+                logger.info(f"会话 {session_id} 归一化清洗后: {session_name[:120]}")
+
+                if not session_name:
+                    session_name = self._fallback_session_name(first_message)
+                    logger.info(
+                        f"会话 {session_id} 清洗后为空，回退名称: {session_name}"
+                    )
 
                 # 限制长度
-                if len(session_name) > 50:
-                    session_name = session_name[:47] + "..."
+                if len(session_name) > 20:
+                    session_name = session_name[:20].strip()
+                    logger.info(f"会话 {session_id} 截断到20字符后: {session_name}")
 
                 # 移除可能的引号（模型可能返回带引号的文本）
                 session_name = session_name.strip("\"'")
+                logger.info(f"会话 {session_id} 去引号后: {session_name}")
 
                 logger.info(f"会话 {session_id} 更新名称为: {session_name}")
 
@@ -742,16 +893,11 @@ class QAManager:
                     thinking = None
                     if content:
                         if isinstance(content, str):
-                            # 检查是否包含<think>标签
-                            think_match = re.search(
-                                r"<think>(.*?)</think>", content, re.DOTALL
+                            clean_content, extracted_thinking = split_reasoning_content(
+                                content
                             )
-                            if think_match:
-                                thinking = think_match.group(1).strip()
-                                # 从content中移除思考过程
-                                clean_content = re.sub(
-                                    r"<think>.*?</think>", "", content, flags=re.DOTALL
-                                ).strip()
+                            if extracted_thinking:
+                                thinking = extracted_thinking
                                 if clean_content:
                                     content = clean_content
                                 logger.info(f"生成思考过程: {thinking}")
@@ -1016,14 +1162,25 @@ class QAManager:
             explanation = self._normalize_visualization_text(explanation, visualization)
             thinking = None
             if isinstance(explanation, str):
-                think_match = re.search(r"<think>(.*?)</think>", explanation, re.DOTALL)
-                if think_match:
-                    thinking = think_match.group(1).strip()
-                    explanation = re.sub(
-                        r"<think>.*?</think>", "", explanation, flags=re.DOTALL
-                    ).strip()
+                clean_explanation, extracted_thinking = split_reasoning_content(
+                    explanation
+                )
+                if extracted_thinking:
+                    thinking = extracted_thinking
+                    explanation = clean_explanation
 
             content = explanation
+            yield {
+                "type": "meta",
+                "payload": {
+                    "sql": sql,
+                    "result": result_data,
+                    "visualization": visualization,
+                    "thinking": thinking,
+                    "explanation": content,
+                },
+            }
+
             yield {
                 "type": "status",
                 "stage": "persist",
@@ -1041,17 +1198,6 @@ class QAManager:
                 reasoning=None,
                 thinking=thinking,
             )
-
-            yield {
-                "type": "meta",
-                "payload": {
-                    "sql": sql,
-                    "result": result_data,
-                    "visualization": visualization,
-                    "thinking": thinking,
-                    "explanation": content,
-                },
-            }
             yield {
                 "type": "status",
                 "stage": "done",
@@ -1323,16 +1469,13 @@ class QAManager:
             # 假设 explanation 可能包含 <think> 标签
             if explanation:
                 if isinstance(explanation, str):
-                    think_match = re.search(
-                        r"<think>(.*?)</think>", explanation, re.DOTALL
+                    clean_explanation, extracted_thinking = split_reasoning_content(
+                        explanation
                     )
-                    if think_match:
-                        thinking = think_match.group(1).strip()
-                        clean_explanation = re.sub(
-                            r"<think>.*?</think>", "", explanation, flags=re.DOTALL
-                        ).strip()
+                    if extracted_thinking:
+                        thinking = extracted_thinking
                         if clean_explanation:
-                            explanation = clean_explanation  # Use cleaned explanation
+                            explanation = clean_explanation
                         logger.info(f"提取到思考过程: {thinking and thinking[:50]}...")
                 elif isinstance(explanation, dict):
                     thinking = explanation.get("reasoning")

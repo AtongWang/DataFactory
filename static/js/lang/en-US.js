@@ -78,7 +78,11 @@
         'settings.vector_database_settings': 'Vector Database Settings',
         'settings.vector_db_path': 'Vector Database Path',
         'settings.vector_db_path_placeholder': 'Vector database storage path',
+        'settings.embedding_provider': 'Embedding Provider',
         'settings.embedding_function': 'Embedding Model',
+        'settings.embedding_api_key': 'Embedding API Key',
+        'settings.embedding_api_base': 'Embedding API Base',
+        'settings.embedding_api_base_placeholder': 'https://api.openai.com/v1',
         
         'settings.neo4j_settings': 'Neo4j Graph Database Settings',
         'settings.neo4j_uri': 'Neo4j Connection URI',

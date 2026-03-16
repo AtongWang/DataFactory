@@ -35,8 +35,11 @@
   },
   "store_database": {
     "path": "${CHROMA_DB_PATH:-./chroma_db}",
+    "embedding_provider": "${EMBEDDING_PROVIDER:-ollama}",
     "embedding_function": "${OLLAMA_EMBEDDING_MODEL:-bge-m3:latest}",
-    "embedding_ollama_url": "${OLLAMA_URL:-http://localhost:11434}"
+    "embedding_ollama_url": "${OLLAMA_URL:-http://localhost:11434}",
+    "embedding_api_key": "${EMBEDDING_API_KEY:-}",
+    "embedding_api_base": "${EMBEDDING_API_BASE:-https://api.openai.com/v1}"
   },
   "naming_model": {
     "enabled": true,

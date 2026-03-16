@@ -15,6 +15,7 @@ from chromadb.utils.embedding_functions.ollama_embedding_function import (
 )
 from backend.config.config_templates import AppConfig
 from backend.services.enhanced_vanna_models import EnhancedOllama, EnhancedOpenAI_Chat
+from backend.utils.openai_compat import normalize_openai_base_url
 from vanna.utils import deterministic_uuid
 import logging
 
@@ -61,6 +62,46 @@ class FilteredOllamaEmbeddingFunction:
         调用底层的嵌入函数，不传递无效的参数
         """
         return self.underlying_function(input)
+
+
+def _normalize_openai_embedding_base_url(base_url: str) -> str:
+    normalized = (base_url or "https://api.openai.com/v1").strip().rstrip("/")
+    return normalize_openai_base_url(normalized)
+
+
+class OpenAICompatibleEmbeddingFunction:
+    def __init__(self, model_name: str, api_key: str, api_base: str):
+        from openai import OpenAI
+
+        self.model_name = model_name
+        self.client = OpenAI(
+            api_key=api_key or "EMPTY",
+            base_url=_normalize_openai_embedding_base_url(api_base),
+        )
+
+    def __call__(self, input):
+        texts = input if isinstance(input, list) else [input]
+        response = self.client.embeddings.create(model=self.model_name, input=texts)
+        return [item.embedding for item in response.data]
+
+
+def _build_embedding_function(config: dict) -> EmbeddingFunction:
+    embedding_provider = config.get("embedding_provider", "ollama")
+    embedding_model = config.get("embedding_model", "llama2")
+
+    if embedding_provider == "openai_compatible":
+        return OpenAICompatibleEmbeddingFunction(
+            model_name=embedding_model,
+            api_key=config.get("embedding_api_key", ""),
+            api_base=config.get("embedding_api_base", "https://api.openai.com/v1"),
+        )
+
+    embedding_ollama_url = config.get("embedding_ollama_url", "http://localhost:11434")
+    return FilteredOllamaEmbeddingFunction(
+        url=f"{embedding_ollama_url}/api/embeddings",
+        model_name=embedding_model,
+        embedding_options=config.get("embedding_options", {}),
+    )
 
 
 def safe_create_completion_for_vanna(client, completion_params, model_name="unknown"):
@@ -110,15 +151,7 @@ class VannaOllama(ChromaDB_VectorStore, EnhancedOllama):
 
     def __init__(self, config=None):
         if config and "embedding_model" in config:
-            # 使用自定义的过滤嵌入函数包装器
-            embedding_ollama_url = config.get(
-                "embedding_ollama_url", "http://localhost:11434"
-            )
-            config["embedding_function"] = FilteredOllamaEmbeddingFunction(
-                url=f"{embedding_ollama_url}/api/embeddings",
-                model_name=config.get("embedding_model", "llama2"),
-                embedding_options=config.get("embedding_options", {}),
-            )
+            config["embedding_function"] = _build_embedding_function(config)
             config["collection_metadata"] = optimized_hnsw_config
         ChromaDB_VectorStore.__init__(self, config=config)
         EnhancedOllama.__init__(self, config=config)
@@ -310,15 +343,7 @@ class VannaOpenAI(ChromaDB_VectorStore, EnhancedOpenAI_Chat):
 
     def __init__(self, config=None):
         if config and "embedding_model" in config:
-            # 使用自定义的过滤嵌入函数包装器
-            embedding_ollama_url = config.get(
-                "embedding_ollama_url", "http://localhost:11434"
-            )
-            config["embedding_function"] = FilteredOllamaEmbeddingFunction(
-                url=f"{embedding_ollama_url}/api/embeddings",
-                model_name=config.get("embedding_model", "llama2"),
-                embedding_options=config.get("embedding_options", {}),
-            )
+            config["embedding_function"] = _build_embedding_function(config)
         ChromaDB_VectorStore.__init__(self, config=config)
         EnhancedOpenAI_Chat.__init__(
             self, client=config.get("openai_client"), config=config
@@ -834,8 +859,11 @@ Generate queries that systematically explore and discover data to provide robust
                     "ollama_host": self.config.model.ollama_url,
                     "model": self.config.model.ollama_model,
                     "path": self.store_database_config.path,
+                    "embedding_provider": self.store_database_config.embedding_provider,
                     "embedding_model": self.store_database_config.embedding_function,
                     "embedding_ollama_url": self.store_database_config.embedding_ollama_url,
+                    "embedding_api_key": self.store_database_config.embedding_api_key,
+                    "embedding_api_base": self.store_database_config.embedding_api_base,
                     "options": {
                         "temperature": self.config.model.temperature,
                         "num_ctx": self.config.model.num_ctx,
@@ -859,14 +887,14 @@ Generate queries that systematically explore and discover data to provide robust
                 # 启用Provider Routing时使用OpenAI Router
                 openai_client = OpenAI(
                     api_key=self.config.model.api_key,
-                    base_url=self.config.model.api_base,
+                    base_url=normalize_openai_base_url(self.config.model.api_base),
                 )
                 logger.info("已启用OpenAI Provider Routing")
             else:
                 # 禁用Provider Routing时直接使用OpenAI
                 openai_client = OpenAI(
                     api_key=self.config.model.api_key,
-                    base_url=self.config.model.api_base,
+                    base_url=normalize_openai_base_url(self.config.model.api_base),
                 )
                 logger.info("已禁用OpenAI Provider Routing")
 
@@ -874,8 +902,11 @@ Generate queries that systematically explore and discover data to provide robust
                 config={
                     "openai_client": openai_client,
                     "path": self.store_database_config.path,
+                    "embedding_provider": self.store_database_config.embedding_provider,
                     "embedding_model": self.store_database_config.embedding_function,
                     "embedding_ollama_url": self.store_database_config.embedding_ollama_url,
+                    "embedding_api_key": self.store_database_config.embedding_api_key,
+                    "embedding_api_base": self.store_database_config.embedding_api_base,
                     "model": self.config.model.model_name,
                     "temperature": self.config.model.temperature,
                     "system_prompt": self.config.model.system_prompt,

@@ -49,8 +49,11 @@ class ChromaDBConfig(DatabaseConfig):
         super().__init__()
         self.type = "chroma"
         self.path = "./chroma_db"  # 默认路径
+        self.embedding_provider = "ollama"
         self.embedding_function = "llama2"  # 默认使用llama2作为嵌入模型
         self.embedding_ollama_url = "http://localhost:11434"  # 嵌入模型专用Ollama URL
+        self.embedding_api_key = ""
+        self.embedding_api_base = "https://api.openai.com/v1"
 
 
 class ModelConfig:
@@ -169,11 +172,20 @@ class AppConfig:
         # 设置向量数据库配置
         config.store_database = ChromaDBConfig()
         config.store_database.path = data.get("store_database", {}).get("path", "")
+        config.store_database.embedding_provider = data.get("store_database", {}).get(
+            "embedding_provider", "ollama"
+        )
         config.store_database.embedding_function = data.get("store_database", {}).get(
             "embedding_function", "llama2"
         )
         config.store_database.embedding_ollama_url = data.get("store_database", {}).get(
             "embedding_ollama_url", "http://localhost:11434"
+        )
+        config.store_database.embedding_api_key = data.get("store_database", {}).get(
+            "embedding_api_key", ""
+        )
+        config.store_database.embedding_api_base = data.get("store_database", {}).get(
+            "embedding_api_base", "https://api.openai.com/v1"
         )
 
         # 设置数据库配置
@@ -299,14 +311,16 @@ class AppConfig:
         # 设置Neo4j配置
         neo4j_data = data.get("neo4j", {})
         config.neo4j = Neo4jConfig()
-        config.neo4j.uri = os.environ.get("NEO4J_URI") or neo4j_data.get(
-            "uri", "bolt://localhost:7687"
+        config.neo4j.uri = (
+            neo4j_data.get("uri")
+            or os.environ.get("NEO4J_URI")
+            or "bolt://localhost:7687"
         )
-        config.neo4j.user = os.environ.get("NEO4J_USER") or neo4j_data.get(
-            "user", "neo4j"
+        config.neo4j.user = (
+            neo4j_data.get("user") or os.environ.get("NEO4J_USER") or "neo4j"
         )
-        config.neo4j.password = os.environ.get("NEO4J_PASSWORD") or neo4j_data.get(
-            "password", "12345678"
+        config.neo4j.password = (
+            neo4j_data.get("password") or os.environ.get("NEO4J_PASSWORD") or "12345678"
         )
 
         # 设置语言配置
@@ -323,8 +337,11 @@ class AppConfig:
             "model": {"type": self.model.type},
             "store_database": {
                 "path": self.store_database.path,
+                "embedding_provider": self.store_database.embedding_provider,
                 "embedding_function": self.store_database.embedding_function,
                 "embedding_ollama_url": self.store_database.embedding_ollama_url,
+                "embedding_api_key": self.store_database.embedding_api_key,
+                "embedding_api_base": self.store_database.embedding_api_base,
             },
             "naming_model": {
                 "enabled": self.naming_model.enabled,
